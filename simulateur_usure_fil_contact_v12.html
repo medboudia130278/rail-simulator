@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Simulateur Usure Fil de Contact Caténaire — v12</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  /* ===== RESET & BASE ===== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    color: #1a1a1a;
+    background: #f5f5f0;
+    min-height: 100vh;
+  }
+
+  /* ===== LAYOUT ===== */
+  .app-header {
+    background: #fff;
+    border-bottom: 1px solid #e0e0d8;
+    padding: 1rem 1.5rem;
+  }
+  .app-header h1 { font-size: 18px; font-weight: 600; color: #1a1a1a; }
+  .app-header p  { font-size: 12px; color: #888; margin-top: 3px; }
+  .app-body { max-width: 960px; margin: 0 auto; padding: 1.25rem 1rem; }
+
+  /* ===== TABS ===== */
+  .tabs { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 1.25rem; }
+  .tab {
+    padding: 6px 14px; font-size: 13px; border-radius: 8px;
+    border: 1px solid #d8d8d0; cursor: pointer;
+    background: #fff; color: #666;
+    transition: background .15s;
+  }
+  .tab:hover { background: #f0f0e8; }
+  .tab.on { background: #f0f0e8; color: #1a1a1a; font-weight: 500; border-color: #b0b0a8; }
+  .pane { display: none; }
+  .pane.on { display: block; }
+
+  /* ===== CARDS ===== */
+  .card {
+    background: #fff;
+    border: 1px solid #e0e0d8;
+    border-radius: 12px;
+    padding: 1rem 1.25rem;
+    margin-bottom: .85rem;
+  }
+  .card-title {
+    font-size: 11px; font-weight: 600; color: #888;
+    text-transform: uppercase; letter-spacing: .06em;
+    margin-bottom: .85rem;
+  }
+
+  /* ===== FORM ROWS ===== */
+  .row { display: flex; align-items: center; gap: 10px; margin-bottom: .55rem; }
+  .row label { font-size: 12px; color: #555; width: 210px; flex-shrink: 0; }
+  .row input[type=range] { flex: 1; min-width: 80px; accent-color: #378ADD; }
+  .row .val { font-size: 12px; font-weight: 600; min-width: 72px; text-align: right; color: #1a1a1a; }
+  .row select {
+    flex: 1; font-size: 12px; padding: 4px 8px;
+    border-radius: 6px; border: 1px solid #ccc;
+    background: #fff; color: #1a1a1a;
+  }
+
+  /* ===== PRESET BUTTONS ===== */
+  .pbrow { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: .85rem; }
+  .pb {
+    padding: 5px 12px; font-size: 12px; border-radius: 8px;
+    border: 1px solid #d0d0c8; cursor: pointer;
+    background: #fff; color: #444;
+  }
+  .pb:hover { background: #f0f0e8; }
+
+  /* ===== QUALITY BUTTONS ===== */
+  .qrow { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: .6rem; }
+  .qb {
+    padding: 6px 10px; font-size: 12px; border-radius: 8px;
+    border: 1px solid #d0d0c8; cursor: pointer;
+    background: #fff; color: #555;
+    flex: 1; min-width: 90px; text-align: center;
+  }
+  .qb:hover { background: #f0f0e8; }
+  .qb.on { border: 2px solid #378ADD; background: #e8f3fc; font-weight: 600; color: #1a1a1a; }
+  .qb small { display: block; font-size: 10px; font-family: monospace; color: #888; margin-top: 2px; }
+  .hint { font-size: 11px; color: #888; font-style: italic; margin-top: .4rem; }
+
+  /* ===== KPI GRID ===== */
+  .kgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-bottom: 1rem; }
+  .kpi { background: #f8f8f4; border-radius: 8px; padding: .75rem .85rem; border: 1px solid #e8e8e0; }
+  .kl { font-size: 11px; color: #888; margin-bottom: 4px; }
+  .kv { font-size: 22px; font-weight: 600; }
+  .ku { font-size: 11px; color: #888; }
+  .ok  .kv { color: #2d6e1a; }
+  .warn .kv { color: #8a5200; }
+  .danger .kv { color: #8a1a1a; }
+
+  /* ===== BARS ===== */
+  .brow { margin-bottom: .6rem; }
+  .bl { display: flex; justify-content: space-between; font-size: 11px; color: #666; margin-bottom: 4px; }
+  .bt { background: #f0f0e8; border-radius: 4px; height: 16px; overflow: hidden; }
+  .bf { height: 100%; border-radius: 4px; transition: width .25s ease; }
+
+  /* ===== CHARTS ===== */
+  .cw  { position: relative; width: 100%; height: 280px; }
+  .cw2 { position: relative; width: 100%; height: 210px; }
+
+  /* ===== TABLE ===== */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th {
+    text-align: left; font-size: 11px; font-weight: 600; color: #888;
+    padding: 4px 10px 6px 0; border-bottom: 1px solid #e0e0d8;
+  }
+  td { padding: 5px 10px 5px 0; border-bottom: 1px solid #f0f0e8; }
+
+  /* ===== INFO BOX ===== */
+  .ib {
+    background: #f0f6fc;
+    border-left: 3px solid #378ADD;
+    border-radius: 0 8px 8px 0;
+    padding: .65rem 1rem;
+    font-size: 12px; color: #444; line-height: 1.6;
+    margin-top: .6rem;
+  }
+  .ref-note {
+    background: #f0faf4;
+    border-left: 3px solid #2a8a50;
+    border-radius: 0 8px 8px 0;
+    padding: .5rem .9rem;
+    font-size: 11px; color: #444; line-height: 1.55;
+    margin-bottom: .75rem;
+  }
+
+  /* ===== DEBUG ===== */
+  pre {
+    font-size: 12px; font-family: 'Courier New', monospace;
+    color: #555; line-height: 1.9; white-space: pre-wrap;
+    background: #f8f8f4; padding: .85rem; border-radius: 8px;
+  }
+
+  /* ===== LEGEND ===== */
+  .legend { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px; font-size: 11px; color: #666; }
+  .legend span { display: flex; align-items: center; gap: 5px; }
+  .ld { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+
+  /* ===== RESPONSIVE ===== */
+  @media (max-width: 600px) {
+    .row label { width: 140px; font-size: 11px; }
+    .row .val  { min-width: 55px; }
+    .kpi .kv   { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app-header">
+  <h1>Simulateur d'usure du fil de contact caténaire</h1>
+  <p>Modèle multi-physique v12 — Friction Archard + Amplification Joule + Érosion par arcs électriques</p>
+</div>
+
+<div class="app-body">
+
+<div class="tabs">
+  <button class="tab on"  onclick="showTab('params',this)">Paramètres</button>
+  <button class="tab"     onclick="showTab('results',this)">Résultats</button>
+  <button class="tab"     onclick="showTab('maint',this)">Maintenance</button>
+  <button class="tab"     onclick="showTab('valid',this)">Validation</button>
+  <button class="tab"     onclick="showTab('debug',this)">Détail calcul</button>
+</div>
+
+<!-- ============================= PARAMÈTRES ============================= -->
+<div class="pane on" id="pane-params">
+
+  <div class="card">
+    <div class="card-title">Préréglages — cas réels documentés</div>
+    <div class="pbrow">
+      <button class="pb" onclick="applyP('paris')">Métro Paris</button>
+      <button class="pb" onclick="applyP('beijing')">Métro Pékin</button>
+      <button class="pb" onclick="applyP('nl')">Intercité NL</button>
+      <button class="pb" onclick="applyP('tgv')">LGV / TGV</button>
+      <button class="pb" onclick="applyP('fret')">Fret lourd</button>
+      <button class="pb" onclick="applyP('tram')">Tramway</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Qualité réseau &amp; maintenance — coefficient A</div>
+    <div class="qrow">
+      <button class="qb"    data-a="0.35" onclick="setQ(this)">Excellent<small>A = 0.35</small></button>
+      <button class="qb on" data-a="0.50" onclick="setQ(this)">Bon<small>A = 0.50</small></button>
+      <button class="qb"    data-a="0.75" onclick="setQ(this)">Standard<small>A = 0.75</small></button>
+      <button class="qb"    data-a="1.10" onclick="setQ(this)">Dégradé<small>A = 1.10</small></button>
+      <button class="qb"    data-a="1.60" onclick="setQ(this)">Critique<small>A = 1.60</small></button>
+    </div>
+    <div class="hint" id="qhint">A = 0.50 — ProRail NL, réseaux européens modernes bien entretenus</div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Électrique</div>
+    <div class="row">
+      <label>Courant moy. / pantographe (A)</label>
+      <input type="range" id="I" min="50" max="1500" step="25" value="350" oninput="sv('I',this.value,'A');calc()">
+      <span class="val" id="vI">350 A</span>
+    </div>
+    <div class="row">
+      <label>Tension réseau</label>
+      <select id="U" onchange="calc()">
+        <option value="750">750 V DC (métro)</option>
+        <option value="1500" selected>1500 V DC</option>
+        <option value="3000">3000 V DC</option>
+        <option value="25000">25 kV AC 50 Hz</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Taux d'arc (% hors contact)</label>
+      <input type="range" id="AR" min="0" max="15" step="0.1" value="1.0" oninput="sv('AR',this.value,'%');calc()">
+      <span class="val" id="vAR">1.0 %</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Mécanique &amp; fil</div>
+    <div class="row">
+      <label>Vitesse moyenne (km/h)</label>
+      <input type="range" id="V" min="20" max="320" step="5" value="50" oninput="sv('V',this.value,'km/h');calc()">
+      <span class="val" id="vV">50 km/h</span>
+    </div>
+    <div class="row">
+      <label>Force de contact (N)</label>
+      <input type="range" id="F" min="30" max="250" step="5" value="70" oninput="sv('F',this.value,'N');calc()">
+      <span class="val" id="vF">70 N</span>
+    </div>
+    <div class="row">
+      <label>Section initiale fil (mm²)</label>
+      <select id="S0" onchange="calc()">
+        <option value="85">85 mm²</option>
+        <option value="100">100 mm²</option>
+        <option value="107">107 mm² (standard EU)</option>
+        <option value="120" selected>120 mm²</option>
+        <option value="150">150 mm²</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Matériau frotteur pantographe</label>
+      <select id="MS" onchange="calc()">
+        <option value="carbon" selected>Carbone imprégné Cu</option>
+        <option value="graphite">Graphite pur</option>
+        <option value="copper">Métal (Cu / laiton)</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Type de caténaire</label>
+      <select id="CT" onchange="calc()">
+        <option value="flexible" selected>Flexible (ligne principale)</option>
+        <option value="rigid">Rigide (tunnel OCR métro)</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Longueur tronçon (km) — arcs</label>
+      <input type="range" id="L" min="1" max="80" step="1" value="15" oninput="sv('L',this.value,'km');calc()">
+      <span class="val" id="vL">15 km</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Exploitation</div>
+    <div class="row">
+      <label>Passages de trains / jour</label>
+      <input type="range" id="NT" min="5" max="500" step="5" value="200" oninput="sv('NT',this.value,'');calc()">
+      <span class="val" id="vNT">200</span>
+    </div>
+    <div class="row">
+      <label>Pantographes actifs / train</label>
+      <input type="range" id="NP" min="1" max="4" step="1" value="1" oninput="sv('NP',this.value,'');calc()">
+      <span class="val" id="vNP">1</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Environnement</div>
+    <div class="row">
+      <label>Humidité relative moy. (%)</label>
+      <input type="range" id="HU" min="10" max="95" step="5" value="60" oninput="sv('HU',this.value,'%');calc()">
+      <span class="val" id="vHU">60 %</span>
+    </div>
+    <div class="row">
+      <label>Température moy. (°C)</label>
+      <input type="range" id="TM" min="-20" max="45" step="5" value="15" oninput="sv('TM',this.value,'°C');calc()">
+      <span class="val" id="vTM">15 °C</span>
+    </div>
+    <div class="row">
+      <label>Pollution / abrasion</label>
+      <select id="PO" onchange="calc()">
+        <option value="0.85">Faible (campagne, plein air)</option>
+        <option value="1.0" selected>Modérée (périurbain)</option>
+        <option value="1.2">Forte (urbain dense)</option>
+        <option value="1.4">Très forte (tunnel, poussière)</option>
+      </select>
+    </div>
+    <div class="row">
+      <label>Jours de gel / an</label>
+      <input type="range" id="IC" min="0" max="60" step="5" value="5" oninput="sv('IC',this.value,'j');calc()">
+      <span class="val" id="vIC">5 j</span>
+    </div>
+  </div>
+
+</div><!-- /pane-params -->
+
+<!-- ============================= RÉSULTATS ============================= -->
+<div class="pane" id="pane-results">
+
+  <div class="kgrid" id="kpis"></div>
+
+  <div class="card">
+    <div class="card-title">Décomposition de l'usure annuelle</div>
+    <div class="brow">
+      <div class="bl"><span>Friction Archard (glissement)</span><span id="b1v">—</span></div>
+      <div class="bt"><div class="bf" id="b1" style="background:#534AB7;width:0%"></div></div>
+    </div>
+    <div class="brow">
+      <div class="bl"><span>Amplification thermique Joule</span><span id="b2v">—</span></div>
+      <div class="bt"><div class="bf" id="b2" style="background:#0F6E56;width:0%"></div></div>
+    </div>
+    <div class="brow">
+      <div class="bl"><span>Érosion par arcs électriques</span><span id="b3v">—</span></div>
+      <div class="bt"><div class="bf" id="b3" style="background:#E24B4A;width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Évolution de la section résiduelle du fil (mm²)</div>
+    <div class="legend">
+      <span><span class="ld" style="background:#378ADD"></span>Section simulée</span>
+      <span><span class="ld" style="background:#E24B4A"></span>Seuil remplacement (75%)</span>
+      <span><span class="ld" style="background:#BA7517"></span>Zone vigilance (85%)</span>
+    </div>
+    <div class="cw"><canvas id="chartW"></canvas></div>
+  </div>
+
+  <div id="rinfo" class="ib"></div>
+
+</div><!-- /pane-results -->
+
+<!-- ============================= MAINTENANCE ============================= -->
+<div class="pane" id="pane-maint">
+
+  <div class="card">
+    <div class="card-title">Plan de maintenance annuel</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Année</th>
+          <th>Section résiduelle</th>
+          <th>% initial</th>
+          <th>Action recommandée</th>
+        </tr>
+      </thead>
+      <tbody id="mbody"></tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Analyse de sensibilité — impact sur la durée de vie (années)</div>
+    <div class="cw2"><canvas id="chartSens"></canvas></div>
+  </div>
+
+</div><!-- /pane-maint -->
+
+<!-- ============================= VALIDATION ============================= -->
+<div class="pane" id="pane-valid">
+
+  <div class="card">
+    <div class="card-title">Validation sur 6 cas de référence documentés</div>
+    <div class="ref-note">
+      <strong>Modèle v12 :</strong> L n'entre pas dans W_mech (usure d'un point fixe du fil).
+      Exposant vitesse adaptatif : 0.50 ≤ 120 km/h → 0.85 ≥ 200 km/h (régime dynamique grande vitesse, Bucca &amp; Collina 2009).
+      Joule = modificateur thermique de la friction (pas mécanisme direct).
+      V_arc = 30 V (tension plasma Cu, indépendante de U_réseau).
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>Cas</th>
+          <th>Terrain (réf.)</th>
+          <th>Simulateur</th>
+          <th>Écart</th>
+          <th>Détail</th>
+        </tr>
+      </thead>
+      <tbody id="vbody"></tbody>
+    </table>
+    <div id="vinfo" class="ib" style="margin-top:.75rem"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Comparaison simulateur vs terrain</div>
+    <div class="cw2"><canvas id="chartVal"></canvas></div>
+  </div>
+
+</div><!-- /pane-valid -->
+
+<!-- ============================= DÉTAIL CALCUL ============================= -->
+<div class="pane" id="pane-debug">
+
+  <div class="card">
+    <div class="card-title">Détail numérique — paramètres actuels</div>
+    <pre id="dbg"></pre>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Description du modèle physique</div>
+    <pre style="font-size:11px">
+MODÈLE MULTI-PHYSIQUE V12 — Fil de contact caténaire
+
+① FRICTION MÉCANIQUE (Archard normalisé)
+   W_mech [mm²/an] = A × (F/70)^1.0 × (V/50)^α × (NT/200)
+                   × f_strip × f_cat × f_env × f_J × f_panto
+
+   α = exposant vitesse adaptatif :
+     V ≤ 120 km/h → α = 0.50 (régime quasi-statique)
+     V ≥ 200 km/h → α = 0.85 (régime dynamique, vibrations)
+     120 < V < 200 → interpolation linéaire
+
+   A = coefficient qualité réseau (calibré sur données terrain) :
+     0.35 → Excellent (RATP, SNCF LGV)
+     0.50 → Bon (ProRail NL, réseaux EU modernes)
+     0.75 → Standard
+     1.10 → Dégradé (Beijing Metro, Guangzhou)
+     1.60 → Critique
+
+   f_strip : {carbone:1.0, graphite:0.78, cuivre:2.4}
+   f_cat   : {flexible:0.85, rigide:1.30}
+   f_env   = f_hum × f_temp × f_glace × f_pollution
+
+② AMPLIFICATION THERMIQUE JOULE (modificateur, pas mécanisme direct)
+   f_J = 1 + 0.18 × ((I−300)/300)^0.9   pour I > 300 A
+   Le courant élève la T° au contact → réduit la dureté Cu
+   → amplifie la friction de (f_J − 1) × 100 %
+
+③ ÉROSION PAR ARCS ÉLECTRIQUES (modèle énergétique)
+   V_arc = 30 V (tension plasma Cu, INDÉPENDANTE de U_réseau)
+   t_contact [s/an] = (L/V) × 3600 × NT × 365
+   E_arc [J/an]  = 30 × I × tau_arc × t_contact
+   W_arc [mm²/an] = K_arc × E_arc × f_hum_arc × f_pollution
+   K_arc = 4.75×10⁻¹¹ mm²/J (calibré Beijing/Guangzhou Metro)
+
+SEUIL DE REMPLACEMENT : 75% de la section initiale (25% usée)
+
+SOURCES :
+  Bucca & Collina (2009, 2015) — Politecnico di Milano
+  Wei Xiukun et al. (2019) — Beijing/Guangzhou Metro
+  MDPI Applied Sciences (2025) — ProRail 9yr dataset
+  Kubo & Kato (1998) — arc discharge wear
+  Luo et al., Railway Eng. Science (2026) — review PCS wear
+    </pre>
+  </div>
+
+</div><!-- /pane-debug -->
+
+</div><!-- /app-body -->
+
+<script>
+// ============================================================
+//  DONNÉES DE RÉFÉRENCE & PRÉRÉGLAGES
+// ============================================================
+var Aval = 0.50;
+var charts = {};
+var lastW = null, lastP = null;
+
+var QNOTES = {
+  '0.35': 'A=0.35 — RATP RER A, SNCF LGV : maintenance préventive systématique',
+  '0.50': 'A=0.50 — ProRail NL, réseaux européens modernes',
+  '0.75': 'A=0.75 — Exploitation standard, maintenance corrective',
+  '1.10': 'A=1.10 — Réseaux intensifs Asie (Beijing L6, Guangzhou L2)',
+  '1.60': 'A=1.60 — Réseau dégradé, maintenance minimale'
+};
+
+var REFS = [
+  { key:'paris',   label:'Métro Paris',    refLife:20,
+    I:350, U:'750',   AR:0.8, V:50,  F:70,  S0:120, MS:'carbon', CT:'rigid',    L:12, NT:220, NP:1, HU:72, TM:15, PO:'1.2',  IC:5,  A:0.45 },
+  { key:'beijing', label:'Métro Pékin',    refLife:12,
+    I:400, U:'750',   AR:1.5, V:45,  F:80,  S0:120, MS:'carbon', CT:'rigid',    L:10, NT:180, NP:1, HU:50, TM:12, PO:'1.3',  IC:15, A:1.10 },
+  { key:'nl',      label:'Intercité NL',   refLife:25,
+    I:250, U:'1500',  AR:0.8, V:130, F:90,  S0:107, MS:'carbon', CT:'flexible', L:40, NT:100, NP:2, HU:80, TM:10, PO:'1.0',  IC:10, A:0.50 },
+  { key:'tgv',     label:'LGV / TGV',      refLife:30,
+    I:200, U:'25000', AR:0.4, V:270, F:170, S0:150, MS:'carbon', CT:'flexible', L:60, NT:80,  NP:1, HU:60, TM:12, PO:'0.85', IC:5,  A:0.35 },
+  { key:'fret',    label:'Fret lourd',     refLife:18,
+    I:600, U:'25000', AR:3.5, V:80,  F:150, S0:150, MS:'carbon', CT:'flexible', L:40, NT:90,  NP:1, HU:65, TM:12, PO:'1.0',  IC:10, A:0.75 },
+  { key:'tram',    label:'Tramway urbain', refLife:15,
+    I:280, U:'750',   AR:2.0, V:25,  F:60,  S0:85,  MS:'carbon', CT:'rigid',    L:8,  NT:180, NP:1, HU:65, TM:14, PO:'1.2',  IC:10, A:0.82 }
+];
+
+// ============================================================
+//  MODÈLE PHYSIQUE V12
+// ============================================================
+
+/**
+ * Exposant vitesse adaptatif
+ * V ≤ 120 km/h : régime quasi-statique → 0.50
+ * V ≥ 200 km/h : régime dynamique (vibrations) → 0.85
+ * Transition linéaire entre 120 et 200 km/h
+ */
+function vExp(V) {
+  if (V <= 120) return 0.50;
+  if (V >= 200) return 0.85;
+  return 0.50 + (V - 120) / (200 - 120) * (0.85 - 0.50);
+}
+
+/**
+ * Calcule l'usure annuelle et ses composantes
+ * @param {Object} p  - paramètres d'entrée
+ * @param {number} A  - coefficient qualité réseau
+ * @returns {Object}  - résultats détaillés
+ */
+function mdl(p, A) {
+  // Coefficients matériaux
+  var fs   = { carbon: 1.0, graphite: 0.78, copper: 2.4 }[p.MS] || 1.0;
+  var fc   = { flexible: 0.85, rigid: 1.30 }[p.CT] || 1.0;
+
+  // Modificateurs environnementaux
+  var fh   = p.HU < 35 ? 1.28 : p.HU < 50 ? 1.10 : p.HU > 80 ? 0.93 : 1.0;
+  var ft   = Math.abs(p.TM - 15) > 25 ? 1.10 : 1.0;
+  var fi   = 1.0 + p.IC * 0.004;
+  var fp   = parseFloat(p.PO);
+  var fe   = fh * ft * fi * fp;
+
+  // Amplification Joule (modificateur thermique)
+  var fj   = p.I > 300 ? 1 + 0.18 * Math.pow((p.I - 300) / 300, 0.9) : 1.0;
+
+  // Multi-pantographes
+  var fpan = 1 + (p.NP - 1) * 0.82;
+
+  // ① Friction mécanique (Archard normalisé, exposant vitesse adaptatif)
+  var exp  = vExp(p.V);
+  var Vf   = Math.pow(p.V / 50, exp);
+  var Wb   = A * (p.F / 70) * Vf * (p.NT / 200) * fs * fc * fe;
+  var Wm   = Wb;                    // friction pure
+  var Wt   = Wb * fj * fpan;        // avec amplification Joule et multi-pantos
+  var Wj   = Wt - Wm;               // contribution Joule isolée
+
+  // ② Érosion par arcs (V_arc = 30V plasma Cu, indépendant de U_réseau)
+  var ts   = (p.L / p.V) * 3600 * p.NT * 365;   // secondes de contact / an
+  var tau  = p.AR / 100;
+  var Ea   = 30 * p.I * tau * ts;                // énergie d'arc [J/an]
+  var Wa   = 4.75e-11 * Ea * (p.HU < 40 ? 1.35 : 1.0) * fp;
+
+  var tot  = Wt + Wa;
+
+  return {
+    Wm: Wm, Wj: Wj, Wt: Wt, Wa: Wa, tot: tot,
+    fj: fj, fc: fc, fs: fs, fe: fe, fpan: fpan,
+    ts: ts, Ea: Ea, exp: exp, Vf: Vf
+  };
+}
+
+/** Durée de vie en années (seuil remplacement = 75% section initiale) */
+function lf(w, s0) {
+  return w.tot > 0 ? (s0 * 0.25) / w.tot : 999;
+}
+
+// ============================================================
+//  UTILITAIRES DOM
+// ============================================================
+function g(id)       { return document.getElementById(id); }
+function sv(id, v, u){ g('v' + id).textContent = v + (u ? ' ' + u : ''); }
+
+function showTab(name, btn) {
+  document.querySelectorAll('.tab').forEach(function(b) { b.classList.remove('on'); });
+  document.querySelectorAll('.pane').forEach(function(p) { p.classList.remove('on'); });
+  btn.classList.add('on');
+  g('pane-' + name).classList.add('on');
+  if (name !== 'params') renderCharts();
+}
+
+function setQ(btn) {
+  document.querySelectorAll('.qb').forEach(function(b) { b.classList.remove('on'); });
+  btn.classList.add('on');
+  Aval = parseFloat(btn.dataset.a);
+  g('qhint').textContent = QNOTES[btn.dataset.a] || ('A = ' + btn.dataset.a);
+  calc();
+}
+
+function applyP(key) {
+  var pr = null;
+  for (var i = 0; i < REFS.length; i++) {
+    if (REFS[i].key === key) { pr = REFS[i]; break; }
+  }
+  if (!pr) return;
+
+  g('I').value  = pr.I;  sv('I',  pr.I,  'A');
+  g('U').value  = pr.U;
+  g('AR').value = pr.AR; sv('AR', pr.AR, '%');
+  g('V').value  = pr.V;  sv('V',  pr.V,  'km/h');
+  g('F').value  = pr.F;  sv('F',  pr.F,  'N');
+  g('S0').value = pr.S0;
+  g('MS').value = pr.MS;
+  g('CT').value = pr.CT;
+  g('L').value  = pr.L;  sv('L',  pr.L,  'km');
+  g('NT').value = pr.NT; sv('NT', pr.NT, '');
+  g('NP').value = pr.NP; sv('NP', pr.NP, '');
+  g('HU').value = pr.HU; sv('HU', pr.HU, '%');
+  g('TM').value = pr.TM; sv('TM', pr.TM, '°C');
+  g('PO').value = pr.PO;
+  g('IC').value = pr.IC; sv('IC', pr.IC, 'j');
+
+  Aval = pr.A;
+  var best = null, bd = 999;
+  document.querySelectorAll('.qb').forEach(function(b) {
+    b.classList.remove('on');
+    var d = Math.abs(parseFloat(b.dataset.a) - pr.A);
+    if (d < bd) { bd = d; best = b; }
+  });
+  if (best) best.classList.add('on');
+  g('qhint').textContent = 'A = ' + pr.A + ' — ' + pr.label;
+
+  calc();
+
+  // Basculer vers l'onglet Résultats
+  document.querySelectorAll('.tab').forEach(function(b) { b.classList.remove('on'); });
+  document.querySelectorAll('.pane').forEach(function(p) { p.classList.remove('on'); });
+  document.querySelectorAll('.tab')[1].classList.add('on');
+  g('pane-results').classList.add('on');
+  renderCharts();
+}
+
+// ============================================================
+//  CALCUL PRINCIPAL
+// ============================================================
+function calc() {
+  var p = {
+    I:  +g('I').value,  U:  +g('U').value,  AR: +g('AR').value,
+    V:  +g('V').value,  F:  +g('F').value,  S0: +g('S0').value,
+    MS: g('MS').value,  CT: g('CT').value,  L:  +g('L').value,
+    NT: +g('NT').value, NP: +g('NP').value,
+    HU: +g('HU').value, TM: +g('TM').value,
+    PO: g('PO').value,  IC: +g('IC').value
+  };
+  var w  = mdl(p, Aval);
+  lastW  = w;
+  lastP  = p;
+  var ly = lf(w, p.S0);
+  var cls = ly > 20 ? 'ok' : ly > 10 ? 'warn' : 'danger';
+  var lbl = ly > 20 ? 'Excellent' : ly > 10 ? 'Acceptable' : 'Critique';
+  var ap  = w.tot > 0 ? (w.Wa / w.tot * 100) : 0;
+
+  // KPIs
+  g('kpis').innerHTML =
+    '<div class="kpi ' + cls + '"><div class="kl">Durée de vie estimée</div>' +
+      '<div class="kv">' + (ly > 60 ? '&gt;60' : (Math.round(ly * 10) / 10).toFixed(1)) + '</div>' +
+      '<div class="ku">années — ' + lbl + '</div></div>' +
+    '<div class="kpi"><div class="kl">Usure annuelle totale</div>' +
+      '<div class="kv">' + w.tot.toFixed(2) + '</div><div class="ku">mm² / an</div></div>' +
+    '<div class="kpi"><div class="kl">dont Friction + Joule</div>' +
+      '<div class="kv">' + w.Wt.toFixed(2) + '</div><div class="ku">mm² / an</div></div>' +
+    '<div class="kpi"><div class="kl">dont Arcs</div>' +
+      '<div class="kv">' + w.Wa.toFixed(2) + '</div>' +
+      '<div class="ku">mm²/an (' + ap.toFixed(0) + '%)</div></div>';
+
+  // Barres de décomposition
+  var t3 = w.Wm + w.Wj + w.Wa;
+  function pct(v) { return t3 > 0 ? Math.min(100, v / t3 * 100) : 0; }
+  g('b1').style.width = pct(w.Wm).toFixed(1) + '%';
+  g('b2').style.width = pct(w.Wj).toFixed(1) + '%';
+  g('b3').style.width = pct(w.Wa).toFixed(1) + '%';
+  g('b1v').textContent = w.Wm.toFixed(2) + ' mm²/an (' + pct(w.Wm).toFixed(0) + '%)';
+  g('b2v').textContent = w.Wj.toFixed(2) + ' mm²/an (' + pct(w.Wj).toFixed(0) + '%)';
+  g('b3v').textContent = w.Wa.toFixed(2) + ' mm²/an (' + pct(w.Wa).toFixed(0) + '%)';
+
+  // Info résumé
+  g('rinfo').innerHTML =
+    '<strong>A = ' + Aval + '</strong> | Exposant V = ' + w.exp.toFixed(2) +
+    ' — Friction : <strong>' + w.Wt.toFixed(2) + ' mm²/an</strong>. ' +
+    'Arcs : <strong>' + w.Wa.toFixed(2) + ' mm²/an</strong> (' + ap.toFixed(0) + '%). ' +
+    'Usure totale : <strong>' + w.tot.toFixed(2) + ' mm²/an</strong>. ' +
+    'Durée de vie : <strong>' + (ly > 60 ? '>60' : ly.toFixed(1)) + ' ans</strong>.';
+
+  // Tableau de maintenance
+  var rows = '', s = p.S0;
+  for (var y = 1; y <= Math.min(35, Math.ceil(ly) + 3); y++) {
+    s -= w.tot;
+    if (s < 0) s = 0;
+    var pc  = s / p.S0 * 100;
+    var act = 'Mesure géométrique annuelle';
+    var col = 'color:#555';
+    if (pc < 75)      { act = '⚠ REMPLACEMENT OBLIGATOIRE';   col = 'color:#8a1a1a;font-weight:600'; }
+    else if (pc < 80) { act = 'Planifier remplacement urgent'; col = 'color:#8a5200;font-weight:600'; }
+    else if (pc < 85) { act = 'Inspection renforcée (6 mois)'; col = 'color:#8a5200'; }
+    else if (y % 5 === 0) { act = 'Inspection approfondie';   col = 'color:#2d6e1a'; }
+    rows += '<tr>' +
+      '<td>An ' + y + '</td>' +
+      '<td>' + s.toFixed(1) + ' mm²</td>' +
+      '<td>' + pc.toFixed(1) + '%</td>' +
+      '<td style="' + col + '">' + act + '</td></tr>';
+    if (pc < 75) break;
+  }
+  g('mbody').innerHTML = rows;
+
+  // Détail calcul
+  g('dbg').textContent =
+    'A = ' + Aval + '\n' +
+    'F = ' + p.F + ' N  →  (F/70) = ' + (p.F / 70).toFixed(3) + '\n' +
+    'V = ' + p.V + ' km/h  →  exposant α = ' + w.exp.toFixed(3) + '  (V/50)^α = ' + w.Vf.toFixed(3) + '\n' +
+    'NT = ' + p.NT + ' trains/j  →  (NT/200) = ' + (p.NT / 200).toFixed(3) + '\n' +
+    '[L = ' + p.L + ' km utilisé UNIQUEMENT pour t_contact des arcs]\n' +
+    'f_strip = ' + w.fs.toFixed(3) + '   f_cat = ' + w.fc.toFixed(3) + '   f_env = ' + w.fe.toFixed(3) + '\n' +
+    'f_J = ' + w.fj.toFixed(3) + '   f_panto = ' + w.fpan.toFixed(3) + '\n' +
+    'W_mech_pure = ' + w.Wm.toFixed(3) + ' mm²/an\n' +
+    'W_joule     = ' + w.Wj.toFixed(3) + ' mm²/an\n' +
+    '─────────────────────────────────────\n' +
+    't_contact = ' + (w.ts / 3600).toFixed(0) + ' h/an\n' +
+    'V_arc = 30 V (plasma Cu, ≠ U_réseau = ' + p.U + ' V)\n' +
+    'E_arc = 30 × ' + p.I + 'A × ' + p.AR + '% × ' + w.ts.toFixed(0) + ' s = ' + (w.Ea / 1e6).toFixed(2) + ' MJ/an\n' +
+    'W_arc = ' + w.Wa.toFixed(3) + ' mm²/an\n' +
+    '═════════════════════════════════════\n' +
+    'W_total = ' + w.tot.toFixed(3) + ' mm²/an\n' +
+    'Durée de vie = ' + lf(w, p.S0).toFixed(1) + ' ans\n' +
+    'Section à 10 ans = ' + Math.max(0, p.S0 - w.tot * 10).toFixed(1) + ' mm² (' + Math.max(0, (p.S0 - w.tot * 10) / p.S0 * 100).toFixed(0) + '%)';
+
+  renderCharts();
+}
+
+// ============================================================
+//  RENDU DES GRAPHIQUES
+// ============================================================
+function renderCharts() {
+  var p = lastP, w = lastW;
+  if (!p || !w) return;
+  var ly = lf(w, p.S0);
+
+  // --- Courbe d'usure ---
+  var yrs = Math.min(55, Math.ceil(ly * 1.4) + 5);
+  var lbls = [], dat = [], thr = [], vig = [];
+  for (var y = 0; y <= yrs; y++) {
+    lbls.push(y === 0 ? 'Pose' : 'An ' + y);
+    dat.push(+(Math.max(0, p.S0 - w.tot * y).toFixed(2)));
+    thr.push(p.S0 * 0.75);
+    vig.push(p.S0 * 0.85);
+  }
+  if (charts.W) charts.W.destroy();
+  charts.W = new Chart(g('chartW'), {
+    type: 'line',
+    data: {
+      labels: lbls,
+      datasets: [
+        { label: 'Section résiduelle', data: dat,
+          borderColor: '#378ADD', backgroundColor: 'rgba(55,138,221,0.07)',
+          fill: true, tension: 0.2, pointRadius: 1.5, borderWidth: 2 },
+        { label: 'Seuil remplacement', data: thr,
+          borderColor: '#E24B4A', borderDash: [5, 4], borderWidth: 1.5,
+          pointRadius: 0, fill: false },
+        { label: 'Zone vigilance', data: vig,
+          borderColor: '#BA7517', borderDash: [3, 5], borderWidth: 1,
+          pointRadius: 0, fill: false }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { min: 0, max: p.S0 * 1.05,
+             title: { display: true, text: 'Section (mm²)', font: { size: 11 } },
+             ticks: { font: { size: 10 } } },
+        x: { ticks: { font: { size: 10 }, autoSkip: true, maxTicksLimit: 12 } }
+      }
+    }
+  });
+
+  // --- Sensibilité ---
+  var mods = [
+    { l: 'Force ×2',          fn: function(pp) { return Object.assign({}, pp, { F: Math.min(250, pp.F * 2) }); } },
+    { l: 'Trains ×2',         fn: function(pp) { return Object.assign({}, pp, { NT: Math.min(500, pp.NT * 2) }); } },
+    { l: 'Taux arc ×3',       fn: function(pp) { return Object.assign({}, pp, { AR: Math.min(15, pp.AR * 3 || 1.5) }); } },
+    { l: 'Courant +50%',      fn: function(pp) { return Object.assign({}, pp, { I: Math.min(1500, pp.I * 1.5) }); } },
+    { l: 'Vitesse ×2',        fn: function(pp) { return Object.assign({}, pp, { V: Math.min(320, pp.V * 2) }); } },
+    { l: 'Caténaire rigide',  fn: function(pp) { return Object.assign({}, pp, { CT: 'rigid' }); } },
+    { l: 'Humidité 25%',      fn: function(pp) { return Object.assign({}, pp, { HU: 25 }); } },
+    { l: 'Qualité dégradée',  fn: function(pp) { return Object.assign({}, pp, { _Ao: 1.10 }); } },
+  ];
+  var impacts = mods.map(function(m) {
+    var pp2 = m.fn(Object.assign({}, p));
+    var A2  = pp2._Ao || Aval;
+    return +(lf(mdl(pp2, A2), pp2.S0) - ly).toFixed(1);
+  });
+  if (charts.S) charts.S.destroy();
+  charts.S = new Chart(g('chartSens'), {
+    type: 'bar', indexAxis: 'y',
+    data: {
+      labels: mods.map(function(m) { return m.l; }),
+      datasets: [{
+        data: impacts,
+        backgroundColor: impacts.map(function(v) { return v >= 0 ? '#2d6e1a' : '#8a1a1a'; }),
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { title: { display: true, text: 'Δ durée de vie (années)' }, ticks: { font: { size: 10 } } },
+        y: { ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+
+  // --- Validation ---
+  var vrows = '', refL = [], simL = [], vlbls = [], errs = [];
+  for (var i = 0; i < REFS.length; i++) {
+    var r   = REFS[i];
+    var pp  = Object.assign({}, r, { S0: r.S0, U: r.U, PO: r.PO });
+    var ww  = mdl(pp, r.A);
+    var sim = lf(ww, pp.S0);
+    var err = (sim - r.refLife) / r.refLife * 100;
+    errs.push(Math.abs(err));
+    var cls2 = Math.abs(err) < 20 ? 'color:#2d6e1a' :
+               Math.abs(err) < 35 ? 'color:#8a5200' : 'color:#8a1a1a';
+    vrows +=
+      '<tr><td>' + r.label + '</td>' +
+      '<td>' + r.refLife + ' ans</td>' +
+      '<td>' + sim.toFixed(1) + ' ans</td>' +
+      '<td style="' + cls2 + '">' + (err > 0 ? '+' : '') + err.toFixed(0) + '%</td>' +
+      '<td style="font-size:11px;color:#888">' +
+        ww.tot.toFixed(2) + ' mm²/an | A=' + r.A + ' | exp=' + ww.exp.toFixed(2) +
+      '</td></tr>';
+    refL.push(r.refLife);
+    simL.push(+sim.toFixed(1));
+    vlbls.push(r.label);
+  }
+  g('vbody').innerHTML = vrows;
+  var mae = errs.reduce(function(a, b) { return a + b; }, 0) / errs.length;
+  g('vinfo').innerHTML =
+    'Erreur relative moyenne : <strong>' + mae.toFixed(0) + '%</strong> sur 6 cas. ' +
+    'Cible pour modèles analytiques publiés : ±20–35%. ' +
+    'Modèles ML sur données terrain (ProRail 9 ans) : ±15%.';
+
+  if (charts.V) charts.V.destroy();
+  charts.V = new Chart(g('chartVal'), {
+    type: 'bar',
+    data: {
+      labels: vlbls,
+      datasets: [
+        { label: 'Terrain (référence)', data: refL, backgroundColor: '#378ADD', borderRadius: 4 },
+        { label: 'Simulateur v12',      data: simL, backgroundColor: '#534AB7', borderRadius: 4 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: true, labels: { font: { size: 11 }, boxWidth: 12 } } },
+      scales: {
+        y: { title: { display: true, text: 'Durée de vie (années)' }, ticks: { font: { size: 10 } } },
+        x: { ticks: { font: { size: 10 }, maxRotation: 25 } }
+      }
+    }
+  });
+}
+
+// ============================================================
+//  INITIALISATION
+// ============================================================
+calc();
+</script>
+</body>
+</html>
