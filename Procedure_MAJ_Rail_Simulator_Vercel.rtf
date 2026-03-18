@@ -1,0 +1,216 @@
+{\rtf1\ansi\deff0
+{\fonttbl
+{\f0 Calibri;}
+{\f1 Consolas;}
+}
+\viewkind4\uc1\pard\sa160\sl276\slmult1\lang1036\f0\fs22\b Procedure detaillee - Mise a jour du fichier JSX jusqu'a l'ouverture de l'URL Vercel\b0\par
+\par
+\b 1. Objectif\b0\par
+Ce document explique la procedure complete pour modifier le fichier \f1 rail_simulator-5.jsx\f0 , tester l'application localement, publier la mise a jour sur GitHub, puis verifier la nouvelle version sur Vercel.\par
+\par
+\b 2. Fichiers et dossier du projet\b0\par
+Le projet se trouve dans le dossier suivant :\par
+\f1 C:\Mohamed\projet python\Others\WEB_interface\Simulators\f0\par
+\par
+Le fichier principal a modifier est :\par
+\f1 rail_simulator-5.jsx\f0\par
+\par
+\b 3. Prerequis\b0\par
+Avant de commencer, verifier les points suivants :\par
+- Node.js est installe sur le PC.\par
+- Le projet contient deja les fichiers \f1 package.json\f0 , \f1 package-lock.json\f0 , \f1 src\f0 , \f1 vite.config.js\f0 .\par
+- Le projet est relie a GitHub.\par
+- Le projet est deja deploye sur Vercel.\par
+\par
+\b 4. Cas normal : vous ne modifiez que le code JSX\b0\par
+Si vous modifiez uniquement \f1 rail_simulator-5.jsx\f0 , vous n'avez normalement pas besoin de refaire \f1 npm install\f0 .\par
+Il faudra surtout :\par
+- sauvegarder le fichier,\par
+- tester localement,\par
+- faire un commit Git,\par
+- pousser sur GitHub,\par
+- laisser Vercel redeployer automatiquement.\par
+\par
+\b 5. Ouvrir le projet\b0\par
+1. Ouvrir VS Code.\par
+2. Ouvrir le dossier :\par
+\f1 C:\Mohamed\projet python\Others\WEB_interface\Simulators\f0\par
+3. Modifier le fichier \f1 rail_simulator-5.jsx\f0 .\par
+4. Enregistrer le fichier.\par
+\par
+\b 6. Ouvrir un terminal dans le bon dossier\b0\par
+Dans VS Code, ouvrir un terminal PowerShell. Verifier que vous etes bien dans :\par
+\f1 C:\Mohamed\projet python\Others\WEB_interface\Simulators\f0\par
+\par
+Si besoin, se placer dans le dossier avec :\par
+\pard\li720\sa120\sl276\slmult1\f1
+cd "C:\Mohamed\projet python\Others\WEB_interface\Simulators"
+\par
+\pard\sa160\sl276\slmult1\f0
+\b 7. Si PowerShell ne reconnait pas node ou npm\b0\par
+Si \f1 node\f0  ou \f1 npm\f0  ne fonctionne pas, executer d'abord :\par
+\pard\li720\sa120\sl276\slmult1\f1
+$env:Path = "C:\Program Files\nodejs;$env:Path"
+\par
+\pard\sa160\sl276\slmult1\f0
+Puis verifier :\par
+\pard\li720\sa120\sl276\slmult1\f1
+node -v
+\par
+& "C:\Program Files\nodejs\npm.cmd" -v
+\par
+\pard\sa160\sl276\slmult1\f0
+\b 8. Si PowerShell bloque npm avec une erreur sur npm.ps1\b0\par
+Utiliser toujours la commande Windows \f1 npm.cmd\f0  au lieu de \f1 npm\f0 .\par
+\par
+Commande recommandee :\par
+\pard\li720\sa120\sl276\slmult1\f1
+& "C:\Program Files\nodejs\npm.cmd" run dev
+\par
+\pard\sa160\sl276\slmult1\f0
+Si c'est la premiere fois apres installation des dependances, utiliser aussi :\par
+\pard\li720\sa120\sl276\slmult1\f1
+& "C:\Program Files\nodejs\npm.cmd" install
+\par
+\pard\sa160\sl276\slmult1\f0
+\b 9. Tester localement apres modification du fichier JSX\b0\par
+Lancer l'application en mode developpement avec :\par
+\pard\li720\sa120\sl276\slmult1\f1
+& "C:\Program Files\nodejs\npm.cmd" run dev
+\par
+\pard\sa160\sl276\slmult1\f0
+Ensuite :\par
+1. Attendre l'affichage de l'URL locale, en general \f1 http://localhost:5173\f0 .\par
+2. Ouvrir cette URL dans le navigateur.\par
+3. Verifier que la page charge correctement.\par
+4. Cliquer sur \f1 Run Simulation\f0 .\par
+5. Verifier que les graphiques s'affichent.\par
+6. Verifier que la modification faite dans \f1 rail_simulator-5.jsx\f0  est bien visible.\par
+\par
+\b 10. Arreter le serveur local\b0\par
+Quand le test local est termine, revenir dans le terminal et appuyer sur :\par
+\pard\li720\sa120\sl276\slmult1\f1
+Ctrl + C
+\par
+\pard\sa160\sl276\slmult1\f0
+\b 11. Verifier l'etat Git avant publication\b0\par
+Dans le terminal, executer :\par
+\pard\li720\sa120\sl276\slmult1\f1
+git status
+\par
+\pard\sa160\sl276\slmult1\f0
+Verifier que le fichier modifie apparait bien dans la liste.\par
+\par
+\b 12. Ajouter et enregistrer la mise a jour dans Git\b0\par
+Executer les commandes suivantes :\par
+\pard\li720\sa120\sl276\slmult1\f1
+git add .
+\par
+git commit -m "Mise a jour du simulateur"
+\par
+\pard\sa160\sl276\slmult1\f0
+Vous pouvez remplacer le message de commit par une description plus precise, par exemple :\par
+\pard\li720\sa120\sl276\slmult1\f1
+git commit -m "Ajout d'une nouvelle logique sur l'usure laterale"
+\par
+\pard\sa160\sl276\slmult1\f0
+\b 13. Envoyer la mise a jour sur GitHub\b0\par
+Executer :\par
+\pard\li720\sa120\sl276\slmult1\f1
+git push
+\par
+\pard\sa160\sl276\slmult1\f0
+Resultat attendu : le depot GitHub est mis a jour sur la branche \f1 main\f0 .\par
+\par
+\b 14. Que fait Vercel apres le push\b0\par
+Une fois le \f1 git push\f0  termine, Vercel detecte automatiquement la mise a jour et relance un deploiement.\par
+Vous n'avez pas besoin de redeployer manuellement dans le cas normal.\par
+\par
+\b 15. Verifier le redeploiement sur Vercel\b0\par
+1. Aller sur \f1 https://vercel.com/dashboard\f0 .\par
+2. Ouvrir le projet \f1 rail-simulator\f0 .\par
+3. Verifier qu'un nouveau deployment est en cours ou termine.\par
+4. Attendre le statut \f1 Ready\f0 .\par
+\par
+\b 16. Ouvrir l'URL publique Vercel\b0\par
+Quand le statut est \f1 Ready\f0  :\par
+1. Ouvrir le projet sur Vercel.\par
+2. Cliquer sur l'URL publique du projet.\par
+3. Verifier que la nouvelle version est bien en ligne.\par
+\par
+Exemple d'URL publique :\par
+\f1 https://nom-du-projet.vercel.app\f0\par
+\par
+\b 17. Procedure courte a retenir\b0\par
+Quand tout est deja installe, la procedure rapide est :\par
+\pard\li720\sa120\sl276\slmult1\f1
+cd "C:\Mohamed\projet python\Others\WEB_interface\Simulators"
+\par
+& "C:\Program Files\nodejs\npm.cmd" run dev
+\par
+\pard\sa160\sl276\slmult1\f0
+Verifier localement, puis :\par
+\pard\li720\sa120\sl276\slmult1\f1
+git add .
+\par
+git commit -m "Mise a jour"
+\par
+git push
+\par
+\pard\sa160\sl276\slmult1\f0
+Ensuite ouvrir Vercel et verifier l'URL publique.\par
+\par
+\b 18. Cas ou il faut refaire npm install\b0\par
+Refaire \f1 npm install\f0  uniquement si :\par
+- vous avez modifie \f1 package.json\f0 ,\par
+- vous avez ajoute une nouvelle bibliotheque,\par
+- le dossier \f1 node_modules\f0  a ete supprime,\par
+- vous travaillez sur un nouveau PC.\par
+\par
+Commande :\par
+\pard\li720\sa120\sl276\slmult1\f1
+& "C:\Program Files\nodejs\npm.cmd" install
+\par
+\pard\sa160\sl276\slmult1\f0
+\b 19. Problemes frequents et solution rapide\b0\par
+\b a) node n'est pas reconnu\b0\par
+Executer :\par
+\pard\li720\sa120\sl276\slmult1\f1
+$env:Path = "C:\Program Files\nodejs;$env:Path"
+\par
+\pard\sa160\sl276\slmult1\f0
+\b b) npm.ps1 est bloque\b0\par
+Utiliser :\par
+\pard\li720\sa120\sl276\slmult1\f1
+& "C:\Program Files\nodejs\npm.cmd" run dev
+\par
+\pard\sa160\sl276\slmult1\f0
+\b c) git push refuse\b0\par
+Verifier que vous etes bien connecte a GitHub et que le remote est correct :\par
+\pard\li720\sa120\sl276\slmult1\f1
+git remote -v
+\par
+\pard\sa160\sl276\slmult1\f0
+\b d) Vercel ne montre pas la nouvelle version\b0\par
+Verifier que le \f1 git push\f0  a bien fonctionne, puis verifier le dernier deployment sur Vercel.\par
+\par
+\b 20. Commandes completes de reference\b0\par
+\pard\li720\sa120\sl276\slmult1\f1
+cd "C:\Mohamed\projet python\Others\WEB_interface\Simulators"
+\par
+$env:Path = "C:\Program Files\nodejs;$env:Path"
+\par
+& "C:\Program Files\nodejs\npm.cmd" run dev
+\par
+git status
+\par
+git add .
+\par
+git commit -m "Mise a jour"
+\par
+git push
+\par
+\pard\sa160\sl276\slmult1\f0
+\b 21. Conclusion\b0\par
+Pour une mise a jour normale, vous aurez generalement seulement besoin de : modifier \f1 rail_simulator-5.jsx\f0 , tester avec \f1 npm.cmd run dev\f0 , faire \f1 git add\f0 , \f1 git commit\f0  et \f1 git push\f0 , puis verifier l'URL Vercel.\par
+}
