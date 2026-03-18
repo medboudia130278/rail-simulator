@@ -625,7 +625,7 @@ export default function App() {
         <div>
           <div style={{fontSize:10,letterSpacing:4,color:cl.teal,fontWeight:700,textTransform:"uppercase"}}>Rail Maintenance</div>
           <div style={{fontSize:20,fontWeight:800,color:"#e8f4f3"}}>Wear and Maintenance Simulator</div>
-          <div style={{fontSize:11,color:"#4a6a74",marginTop:3,letterSpacing:1}}>Created by Mohamed BOUDIA</div>
+          <div style={{fontSize:12,color:"#4a6a74",marginTop:3,letterSpacing:1}}>Created by Mohamed BOUDIA</div>
         </div>
         <div style={{display:"flex",gap:10,alignItems:"center"}}>
           <span style={{fontSize:12,color:cl.dim}}>Gross MGT: <b style={{color:cl.teal}}>{mgtPrev}</b>/yr | Equiv. MGT: <b style={{color:cl.teal}}>{eqPrev}</b>/yr</span>
