@@ -1139,510 +1139,97 @@ function GrindPanel(props) {
 // ---- HELP MODAL ----
 
 var HELP=[
-  {id:"overview",title:"Overview",
-   body:"Rail Wear and Maintenance Simulator v1.1 - Created by Mohamed BOUDIA.\n\nPURPOSE: Estimates rail wear progression, grinding cycles, replacement timelines, and full lifecycle costs (replacement + grinding + stones) for tram, metro/LRT, and heavy rail.\n\nPHYSICS ENGINE: Archard wear model (1953) + Eisenmann dynamic load formula + RCF damage accumulation.\n\nCALIBRATION: Infrabel/TU Delft 2023 big-data study (5338 km, Belgium 2012-2019) and Guangzhou Metro field measurements (2021-2022, China).\n\nCONTEXTS: Tram (Q_ref=10t), Metro/LRT (Q_ref=15t), Heavy rail (Q_ref=22.5t). Each radius band simulated independently on annual time step.\n\nSTANDARDS: EN 13674-1:2011 (wear limits), UIC 714R (defect inspection), EN 15692 (gauge corner contact), prEN 17343 (rail grinding spec).",
-   links:[
-     {label:"EN 13674-1:2011 - Rail profiles and wear limits",url:"https://www.en-standard.eu/bs-en-13674-1-2011-railway-applications-track-rail/",type:"standard"},
-     {label:"UIC 714R - Rail defect catalogue",url:"https://uic.org/IMG/pdf/714r.pdf",type:"standard"},
-     {label:"prEN 17343 - Rail grinding specification (CEN)",url:"https://standards.cen.eu/dyn/www/f?p=204:110:0::::FSP_PROJECT:67843",type:"standard"},
-   ]
+  {
+    id:"overview",
+    title:"Overview",
+    body:"Rail Wear and Maintenance Simulator v1.1 - Created by Mohamed BOUDIA. Estimates rail wear progression, grinding intervention cycles, replacement timelines, and full lifecycle costs for tram, metro/LRT, and heavy rail infrastructure. The simulator models each track segment independently by radius band. Physics engine: Archard wear model (1953) + Eisenmann dynamic load formula. Calibrated on Infrabel/TU Delft 2023 big-data study (5338 km, 2012-2019) and Guangzhou Metro field measurements (2021-2022). Applicable contexts: tram lines (Q_ref=10t), metro/LRT (Q_ref=15t), heavy rail (Q_ref=22.5t)."
   },
-  {id:"mgt",title:"MGT - Traffic Loading",
-   body:"DEFINITION: Gross MGT/yr = (Passes/day x Axle load x Bogies x Axles/bogie x 365) / 1,000,000. Multiple train types summed linearly.\n\nEQUIVALENT MGT (damage): MGT_eq = MGT x (Q_axle / Q_ref)^3. A 20t axle causes ~8x more wear than a 10t axle at same gross tonnage. Exponent n=3 for wear (Archard), n=4 for fatigue/RCF.\n\nPARAMETER IMPACTS:\n- Passes/day: direct linear effect. Doubling passes = doubling wear.\n- Axle load: cubic effect via equivalent MGT. +10% axle load = +33% wear damage. Most sensitive parameter.\n- Bogies x Axles/bogie: linear effect on total axle passes.\n\nREFERENCE LOADS: Tram=10t, Metro=15t, Heavy=22.5t (mixed freight/passenger).",
-   links:[
-     {label:"Archard J.F. (1953) - Contact and Rubbing of Flat Surfaces, J.Applied Physics 24(8)",url:"https://doi.org/10.1063/1.1721448",type:"paper"},
-     {label:"IHHA Wheel-Rail Interface Guidelines, 5th ed. (2019)",url:"https://www.ihha.net/",type:"standard"},
-     {label:"EN 13674-1:2011 Annex A - Load equivalence",url:"https://www.en-standard.eu/bs-en-13674-1-2011-railway-applications-track-rail/",type:"standard"},
-   ]
+  {
+    id:"mgt",
+    title:"MGT - Million Gross Tonnes",
+    body:"Gross MGT/yr = (Passes/day x axle load x bogies x axles/bogie x 365) / 1,000,000. Multiple train types are supported and summed. Equivalent MGT applies the cube law for damage equivalence: MGT_eq = MGT x (Q_axle / Q_ref)^3. A 20t axle causes approximately 8 times more damage than a 10t axle at the same tonnage. The cube law exponent n=3 is used for wear; n=4 is used for fatigue and RCF. Reference axle loads: tram=10t, metro=15t, heavy=22.5t. Sources: Archard (1953), IHHA Wheel-Rail Interface Guidelines (2019)."
   },
-  {id:"radius",title:"Radius Bands and Wear Factors",
-   body:"CONCEPT: Five radius bands define vertical multiplier f_V and lateral multiplier f_L relative to tangent (r5, R>=800m = 1.0 reference).\n\nBAND TABLE (f_V / f_L):\n- r1: R<100m       6.0 / 15.0  Severe flange/gauge face contact\n- r2: R100-200m    4.0 / 9.0   Significant lateral creep\n- r3: R200-400m    2.5 / 5.0   Mixed wear modes\n- r4: R400-800m    1.5 / 2.5   Mostly crown contact\n- r5: R>=800m      1.0 / 1.0   Tangent reference\n\nIMPACT: Wrong band = 50-300% error. Wrong representative radius within band = 5-15% error. Rail grade hardness benefit is progressively capped on tighter curves: R400HT saves 38% on tangent but only 14% on R<150m.",
-   links:[
-     {label:"Infrabel/TU Delft (2023) - Big-data analysis of rail wear, Wear 522",url:"https://doi.org/10.1016/j.wear.2022.204764",type:"paper"},
-     {label:"Magel et al. (2017) - Wheel-Rail Tribology, Elsevier",url:"https://doi.org/10.1016/B978-0-12-809819-4.00001-X",type:"paper"},
-     {label:"EN 13231-3:2012 - Inspection and acceptance of rail grinding",url:"https://standards.cen.eu/dyn/www/f?p=204:110:0::::FSP_PROJECT:28028",type:"standard"},
-   ]
+  {
+    id:"radius",
+    title:"Radius Bands and Wear Factors",
+    body:"Five radius bands define the vertical wear multiplier f_V and lateral wear multiplier f_L relative to tangent track. Band r1 (R<100m): f_V=6.0, f_L=15.0. Band r2 (100-200m): f_V=4.0, f_L=9.0. Band r3 (200-400m): f_V=2.5, f_L=5.0. Band r4 (400-800m): f_V=1.5, f_L=2.5. Band r5 (>=800m, tangent): f_V=1.0, f_L=1.0. Each active segment has its own rail grade, representative radius (adjustable within the band), and length in km. Lateral wear is also modulated by the lubrication level (affects curves only, not tangent). Sources: EN 13674-1:2011, UIC 714R, Infrabel grade study."
   },
-  {id:"wear",title:"Wear Rate Model",
-   body:"BASE RATE: 0.82 mm/100MGT vertical crown wear. R260 grade, tangent, ballasted track, 80 km/h. Source: Infrabel/TU Delft 2023 (5338 km statistical analysis).\n\nFORMULA:\nwearRate_V = 0.82 x f_V(band) x hardnessEffect x f_railType x f_trackForm x f_speed\nwearRate_L = 1.00 x 1.5 x f_L(band) x hardnessEffect x f_railType x f_trackForm x f_speed x f_lubr\nhardnessEffect = 1 - (1 - f_wear_grade) / (1 + f_L x 0.3)  [caps hardness benefit in tight curves]\n\nPARAMETER IMPACTS:\n- Rail grade: R400HT saves 38% on tangent, only 14% on R<150m. Most effective on gentle curves.\n- Rail type: Groove +20% vertical, +80% lateral vs vignole.\n- Track form: Slab +10-15%, Embedded +15-20% vs ballasted.\n- Speed: <40 km/h = -10% vertical. >120 km/h = +10-35% vertical.",
-   links:[
-     {label:"Infrabel/TU Delft (2023) - Full paper, Wear 522",url:"https://doi.org/10.1016/j.wear.2022.204764",type:"paper"},
-     {label:"Esveld C. (2001) - Modern Railway Track, 2nd ed.",url:"https://www.mrt-productions.nl/",type:"book"},
-     {label:"Magel E. (2011) - Rolling Contact Fatigue: A Comprehensive Review, NRCC/FRA",url:"https://railroads.dot.gov/sites/fra.dot.gov/files/fra_net/15009/Magel_RCF_Review_2011.pdf",type:"paper"},
-   ]
+  {
+    id:"wear",
+    title:"Wear Rate Model",
+    body:"Base vertical wear rate: 0.82 mm/100MGT (R260, tangent, standard ballasted track). This is the reference value from the Infrabel/TU Delft 2023 big-data analysis of 5338 km. Multipliers applied: radius band (f_V, f_L), rail grade hardness, rail type (vignole vs groove), track form (ballasted, slab, embedded), line speed, and flange lubrication. Hardness effect: R400HT saves approximately 38% wear on tangent but only 14% on R150m curves because lateral contact forces dominate and the hardness benefit is progressively capped. Formula: wearRate_V = baseWear x f_V x hardnessEffect x f_railType x f_trackForm x f_speed. Lateral: same with f_L and lubrication factor."
   },
-  {id:"rcf",title:"RCF - Rolling Contact Fatigue",
-   body:"DEFINITION: Cyclic plastic deformation at wheel-rail contact causing surface/sub-surface crack initiation. RCF index (0 to 1) = accumulated damage relative to failure threshold.\n\nRCF PARADOX (magic wear rate): Moderate curves (r4, R400-800m) have HIGHER RCF than tight curves (r1). Tight curves wear fast enough to remove the crack layer before propagation. Moderate curves initiate cracks but lack sufficient wear to remove them.\n\nRCF THRESHOLDS:\n- 0.0-0.3: Healthy - preventive grinding sufficient\n- 0.3-0.7: Moderate - corrective grinding required\n- 0.7-1.0: Critical - replacement mandatory (cracks >5-8mm deep)\n\nFORMULA: RCF_increment/yr = rcfBase x MGT x (1 - min(0.80, wearRate/5.0))\nAfter grinding: RCF reduced by passes x rcfReduction x (1 + (1-RCF) x 0.5)",
-   links:[
-     {label:"Infrabel/Int.J.Fatigue (2025) - 212 instrumented curves analysis",url:"https://doi.org/10.1016/j.ijfatigue.2024.108342",type:"paper"},
-     {label:"Ringsberg J.W. (2001) - Life prediction of RCF crack initiation, Int.J.Fatigue 23(7)",url:"https://doi.org/10.1016/S0142-1123(01)00011-5",type:"paper"},
-     {label:"Squires G. et al. (2006) - Rolling Contact Fatigue, RSSB T174",url:"https://www.rssb.co.uk/research-catalogue/CatalogueItem/T174",type:"paper"},
-     {label:"UIC 712R - Rail defect catalogue (RCF classification)",url:"https://uic.org/IMG/pdf/712r.pdf",type:"standard"},
-   ]
+  {
+    id:"rcf",
+    title:"RCF - Rolling Contact Fatigue",
+    body:"Counterintuitively, moderate curves (R400-800m) accumulate HIGHER RCF damage than tight curves. This is the magic wear rate paradox: tight curves wear fast enough to remove surface cracks before they can propagate into the rail head. The RCF index ranges from 0 (healthy) to 1.0 (failure). Thresholds: below 0.3 = preventive grinding is effective; 0.3-0.7 = corrective grinding needed; above 0.7 = replacement required (cracks too deep for grinding). RCF increment per year = rcfBase x MGT x (1 - wear_protection), where wear_protection = min(0.80, wearRate/5.0). After grinding, RCF is reduced proportionally to passes and remaining health. Source: Infrabel/Int. J. Fatigue 2025 - analysis of 212 instrumented curves."
   },
-  {id:"grinding",title:"Grinding Strategy",
-   body:"PREVENTIVE strategy:\n- Interval: base table per band/context (e.g. 20 MGT metro r4, 80 MGT heavy r5)\n- Removal per pass: 0.20 mm | Metal consumed: 0.20 mm/intervention\n- Post-grinding wear factor: 0.75 (restored profile reduces future wear by 25%)\n- RCF reduction per pass: ~30% with health bonus\n- Typical rail life: 400-600 accumulated MGT before replacement\n\nCORRECTIVE strategy:\n- Interval: 3x longer than preventive base\n- Removal: 0.55 mm/pass, up to 4 passes | Metal consumed: up to 2.2 mm/intervention\n- Post-grinding wear factor: 0.92 (partial restoration, -8% future wear)\n- Typical rail life: 200-350 accumulated MGT\n\nKEY: With R350HT (17mm reserve) and corrective strategy, only 7-8 interventions possible before reserve is exhausted (17mm / 2.2mm = 7.7 interventions).",
-   links:[
-     {label:"Grassie S.L. (2005) - Rail corrugation: measurement, understanding and treatment, Wear 258",url:"https://doi.org/10.1016/j.wear.2004.03.066",type:"paper"},
-     {label:"Infrabel - Grinding Management Report (2022)",url:"https://www.infrabel.be/en/rail-safety",type:"report"},
-     {label:"EN 13231-3:2012 - Rail grinding acceptance criteria",url:"https://standards.cen.eu/dyn/www/f?p=204:110:0::::FSP_PROJECT:28028",type:"standard"},
-     {label:"BNSF Railway - Preventive-gradual grinding programme overview",url:"https://www.bnsf.com/",type:"report"},
-   ]
+  {
+    id:"grinding",
+    title:"Grinding Strategy",
+    body:"Preventive strategy: short intervals (base table per radius band and context), 1 light pass removing 0.20mm, RCF kept below 0.3, profile well restored after each intervention = lower future wear rate = maximum rail life (typically 400-600 accumulated MGT before replacement). Corrective strategy: intervals 3 times longer, up to 4 heavy passes removing up to 0.55mm each, RCF rises to 0.5-0.6 before intervention, metal reserve consumed faster = shorter rail life (typically 200-350 MGT). Post-grinding wear factor: preventive = 0.75 (25% reduction thanks to restored profile); corrective = 0.92 (8% reduction). Sources: BNSF preventive-gradual programme; Delhi Metro O&M plan; Infrabel grinding management report 2022."
   },
-  {id:"lubrication",title:"Flange Lubrication",
-   body:"FUNCTION: Reduces flange/gauge face friction. Affects LATERAL wear only. No effect on crown wear or RCF.\n\nFACTORS BY BAND (r1 R<100m to r5 tangent):\n- No lubrication:         1.00 / 1.00 / 1.00 / 1.00 / 1.00\n- Poor/badly maintained:  0.80 / 0.82 / 0.88 / 0.95 / 1.00\n- Standard wayside:       0.55 / 0.60 / 0.72 / 0.90 / 1.00\n- Good (wayside+onboard): 0.35 / 0.40 / 0.60 / 0.85 / 1.00\n- Optimal (lab only):     0.10 / 0.15 / 0.35 / 0.75 / 1.00\n\nIMPACT: Standard wayside reduces lateral wear by 45% on R<100m, 40% on R100-200m, 28% on R200-400m. No effect on tangent. Lateral wear is often the limiting criterion on curves below R200m.\n\nWARNING: Optimal is unrealistic in service. Good is the practical maximum due to contamination, rain, and maintenance gaps.",
-   links:[
-     {label:"Arias-Cuevas et al. (2010) - Friction modifiers in dry/wet conditions, Wear 268",url:"https://doi.org/10.1016/j.wear.2009.09.006",type:"paper"},
-     {label:"Shanghai Metro Line 2 lateral wear study (2021), J.Rail and Rapid Transit",url:"https://doi.org/10.1177/0954409720915584",type:"paper"},
-     {label:"Banverket (2018) - Field trials on lateral wear with friction modifiers (Sweden)",url:"https://www.trafikverket.se/",type:"report"},
-   ]
+  {
+    id:"lubrication",
+    title:"Flange Lubrication",
+    body:"Lubrication reduces LATERAL wear only - it has no effect on vertical crown wear. The lubrication effectiveness factor varies by radius band: it is highest on tight curves (R<100m) and equals 1.0 (no effect) on tangent track. Five levels are modelled: No lubrication (factor=1.0 everywhere); Poor/badly maintained (0.80 to 1.0 depending on band); Standard wayside lubrication (0.55 to 1.0); Good - wayside and onboard combined (0.35 to 1.0); Optimal - lab conditions, unrealistic in revenue service (0.10 to 1.0). Standard wayside lubrication reduces lateral wear by 28-45% on curves under 200m radius. Sources: Swedish SJ trials (2018); Shanghai Metro lateral wear study (2021)."
   },
-  {id:"brownfield",title:"Brownfield Mode",
-   body:"PURPOSE: Start simulation from existing worn rail. Essential for inherited projects, condition assessments, and remaining life evaluations.\n\nINPUT PARAMETERS (per segment):\n- Vertical wear (mm): depth from original profile height. Impact: simulation starts here; replacement sooner.\n- Lateral wear (mm): gauge face wear at 14mm below running surface (EN 13674-1 convention).\n- RCF index (0 to 1): from UT inspection or surface assessment. Above 0.3 triggers corrective grinding in year 1.\n- Accumulated MGT: total since installation. Used for lifecycle cost amortisation.\n\nHEALTH INDICATOR: health = max(wearV/limitV, wearL/limitL, RCF). Good <40%, Moderate 40-70%, Poor >70%.\n\nMETAL RESERVE: initial_reserve = nominal_reserve - (wearV x 0.8). The 0.8 factor accounts for grinding-consumed reserve not visible in wear measurement.\n\nTYPICAL USE: Input last inspection report values. Simulator shows: years remaining, urgent grinding need, updated budget.",
-   links:[
-     {label:"EN 13231-1:2016 - Acceptance of railway track geometry after maintenance",url:"https://standards.cen.eu/dyn/www/f?p=204:110:0::::FSP_PROJECT:38793",type:"standard"},
-     {label:"EN 13674-1:2011 - Rail wear measurement convention (clause 5.4)",url:"https://www.en-standard.eu/bs-en-13674-1-2011-railway-applications-track-rail/",type:"standard"},
-     {label:"Network Rail NR/SP/TRK/001 - Track inspection handbook (2021)",url:"https://www.networkrail.co.uk/industry-and-commercial/",type:"standard"},
-   ]
+  {
+    id:"brownfield",
+    title:"Brownfield Mode",
+    body:"Brownfield mode allows simulation of existing rail in service rather than new rail. Enable the toggle in the Initial Rail Condition card to enter current measured values per segment: vertical wear (mm), lateral wear (mm), RCF index (0 to 1), and accumulated MGT since installation. The simulation starts from these initial conditions and projects the remaining service life. The health indicator (Good/Moderate/Poor) shows the percentage of service life already consumed as max(wearV/limitV, wearL/limitL, RCF). Metal reserve is adjusted: initial reserve = nominal reserve minus estimated consumed reserve (80% of measured vertical wear). This allows direct answer to the brownfield question: how many years remain before replacement, and when is the next grinding intervention needed?"
   },
-  {id:"replacement",title:"Replacement Criteria",
-   body:"REPLACEMENT triggered when ANY ONE condition is met:\n\n1. VERTICAL WEAR >= limit:\n   Tram: 7mm | Metro: 9mm | Heavy rail: 12mm\n   Reduces structural section; increases stress concentration.\n\n2. LATERAL WEAR >= limit:\n   Tram: 8mm | Metro: 11mm | Heavy rail: 14mm\n   Affects gauge and flange clearance. Measured at 14mm below running surface (EN 13674-1).\n\n3. METAL RESERVE <= 2mm:\n   Initial reserves: R200=13mm, R260=15mm, R320Cr=16mm, R350HT=17mm, R400HT=18mm.\n   Each intervention consumes: 0.20mm (preventive, 1 pass) to 2.2mm (corrective, 4 passes).\n\n4. RCF INDEX >= 0.70:\n   Cracks typically 5-8mm deep. Grinding cannot reach without exhausting metal reserve.",
-   links:[
-     {label:"EN 13674-1:2011 Table 2 - Wear limits for vignole rail",url:"https://www.en-standard.eu/bs-en-13674-1-2011-railway-applications-track-rail/",type:"standard"},
-     {label:"UIC 714R - Rail defect action levels (2004)",url:"https://uic.org/IMG/pdf/714r.pdf",type:"standard"},
-     {label:"Network Rail NR/L2/TRK/001 - Track inspection and maintenance (2022)",url:"https://www.networkrail.co.uk/industry-and-commercial/",type:"standard"},
-     {label:"Infrabel TR 00059 - Rail inspection and renewal criteria (2021)",url:"https://www.infrabel.be/en/about-infrabel/technical-references",type:"standard"},
-   ]
+  {
+    id:"replacement",
+    title:"Replacement Criteria",
+    body:"Replacement is triggered when ANY one of four conditions is met: (1) Vertical wear reaches the limit - tram 7mm, metro 9mm, heavy rail 12mm per EN 13674-1. (2) Lateral wear reaches the limit - tram 8mm, metro 11mm, heavy rail 14mm. (3) Metal reserve drops to 2mm or below - reserve starts at 13mm (R200), 15mm (R260), 16mm (R320Cr), 17mm (R350HT), 18mm (R400HT) for groove rail 12mm; each grinding pass consumes metal. (4) RCF index reaches 0.70 - at this level cracks have propagated too deep for grinding to be effective and replacement is mandatory. Source: EN 13674-1:2011, UIC 714R, Infrabel track renewal specifications."
   },
-  {id:"cost_repl",title:"Replacement Cost Estimation",
-   body:"SCOPE: Total cost of track renewal (both rails) per linear meter and per segment.\n\nSIX COST COMPONENTS:\n1. Labour: fully loaded rates (salary + social charges). Team: 1 foreman, 4 technicians, 2 welders, 2 machinists (all adjustable).\n2. Rail material: price/tonne x kg/m x 2 rails. R260=60kg/m. Premium grades cost 20-40% more.\n3. Equipment: tamping machine, rail-road vehicle, crane, truck. Optional pre-grinding pass.\n4. Welding: cost/joint x joints/meter (1/spacing). Aluminothermic = standard; flash butt = higher quality (HSL).\n5. Tooling/consumables: 5% of labour (clips, anchors, fishplates).\n6. Overhead/supervision: configurable %, typically 15-22%.\n\nNIGHT PRODUCTIVITY: 70% efficiency factor applied to daytime rates.\n6 REGIONAL PRESETS: WEU, EEU, MENA, SSA, SEA, LATAM. Labour varies 5-8x; material 30-70% between regions.",
-   links:[
-     {label:"World Bank Railway Toolkit - Unit costs for rail renewal (2019)",url:"https://openknowledge.worldbank.org/handle/10986/31382",type:"report"},
-     {label:"AREMA Manual for Railway Engineering Ch.4 - Rail (2022)",url:"https://www.arema.org/publications/",type:"standard"},
-     {label:"RFI Italy - Prezzario FS Italiane (2023)",url:"https://www.rfi.it/it/infrastruttura/standard-tecnici.html",type:"report"},
-   ]
+  {
+    id:"cost_repl",
+    title:"Replacement Cost Estimation",
+    body:"The Replacement Cost tab estimates the cost per linear meter of track renewal (both rails) and the total cost per segment. Six cost components: Labour (fully loaded team rates including social charges), Rail material (price per tonne by grade x kg/m x 2 rails), Equipment rental (tamping machine, rail-road vehicle, crane, truck, optional pre-grinding pass), Welding (aluminothermic or flash butt, per joint spacing), Tooling and consumables (5% of labour), Overhead and supervision (configurable %). Six regional presets are provided: Western Europe, Eastern Europe, North Africa/Middle East, Sub-Saharan Africa, South-East Asia, Latin America. All rates are editable. Twelve display currencies available. Night productivity factor of 70% is applied. The table shows total cost per segment, annualised cost over the horizon, and nights required. Source: RFI Italy, Infrabel Belgium, ONCF Morocco contractor rate data (2022-2023)."
   },
-  {id:"cost_grind",title:"Grinding Cost Estimation",
-   body:"SCOPE: Cumulative cost of all grinding interventions over the simulation horizon.\n\nTHREE MACHINE TYPES:\n- Small (tram/metro): 16-24 heads, ~200 ml/h. Suitable for light rail, metro, depot.\n- Line machine (ballasted): 32-48 heads, ~400 ml/h. Standard for suburban/mainline own fleets.\n- Specialist Speno/Loram/Vossloh: 64-120 heads, ~800 ml/h. Subcontract only. Cost-effective above ~100 km/yr.\n\nOWN FLEET cost/ml/pass = stones + fuel + maintenance + labour x time/ml.\nSUBCONTRACT cost = operation rate/ml/pass + mobilisation (fixed fee + distance x km from depot).\nMobilisation: per intervention (spot contracts) vs once per horizon (framework contracts).\n\nKEY INSIGHT: Own fleet is competitive above ~80-100 km/yr grinding. Below this threshold, mobilisation costs make subcontracting cheaper.",
-   links:[
-     {label:"Speno International - Rail grinding services and technology",url:"https://www.speno.ch/en/services/rail-grinding/",type:"report"},
-     {label:"Loram Technologies - Rail grinding effectiveness",url:"https://www.loram.com/capabilities/rail-grinding/",type:"report"},
-     {label:"Vossloh Rail Services - Grinding and milling services",url:"https://www.vossloh.com/en/products-and-solutions/rail-services/rail-milling-and-grinding/",type:"report"},
-     {label:"Zarembski A.M. (2005) - The art and science of rail grinding, AREMA Proceedings",url:"https://www.arema.org/publications/",type:"paper"},
-   ]
+  {
+    id:"cost_grind",
+    title:"Grinding Cost Estimation",
+    body:"The Grinding Cost tab estimates the cumulative cost of all grinding interventions over the simulation horizon. Three machine types: Small machine for tram/metro (approx 200 ml/h), Standard line machine for ballasted track (approx 400 ml/h), Specialist machine Speno/Loram/Vossloh for heavy rail (approx 800 ml/h, subcontract only). Two operating modes: Own fleet - cost = grinding stones + fuel + maintenance + labour per hour per ml per pass; Subcontract - cost = operation rate per ml per pass + mobilisation. Mobilisation for subcontracting includes a fixed fee (ferry, logistics, insurance) plus a per-km distance rate from the contractors depot. Mobilisation can be charged per intervention (spot contracts) or once per horizon (framework contracts). Rates calibrated from Speno International and Loram published data, and infrastructure manager reports (RFI 2022, Infrabel 2023)."
   },
-  {id:"stones",title:"Grinding Stone Consumption",
-   body:"FUNCTION: Grinding stones (abrasive wheels) are consumables mounted on each grinding head. They wear during operation.\n\nCONSUMPTION FACTORS:\n1. Radius (most critical): Tight curves require 5-8x more stones than tangent. Higher contact angles increase stone face wear.\n   Base rates (stones/km/rail/pass): r1=2.0-5.0 / r2=1.25-3.25 / r3=0.75-1.75 / r4=0.50-1.10 / r5=0.40-1.00\n   (range: small machine to Speno specialist)\n2. Rail grade hardness: Harder rail wears stones faster. Factors: R260=1.0x, R320Cr=1.15x, R350HT=1.30x, R400HT=1.45x.\n3. Machine type: Stone weight - small=0.9 kg, line=1.4 kg, Speno=2.2 kg.\n\nCOST: Typical unit price 5-20 EUR/stone. Stone cost = 30-50% of own-fleet grinding cost.\n\nCUSTOM RATE: Enter your measured rate for the R200-400m band. All other bands scale proportionally from the preset ratio.",
-   links:[
-     {label:"Speno International TB-2019-04 - Stone consumption factors by curve radius",url:"https://www.speno.ch/en/services/rail-grinding/",type:"report"},
-     {label:"Loram Technologies - Abrasive consumption field data (2021)",url:"https://www.loram.com/capabilities/rail-grinding/",type:"report"},
-     {label:"Rame I. et al. (2018) - Abrasive wear of grinding wheels in rail grinding, Wear 406-407",url:"https://doi.org/10.1016/j.wear.2018.01.012",type:"paper"},
-     {label:"Vossloh Rail Services - Grinding wheel application guide (2020)",url:"https://www.vossloh.com/en/products-and-solutions/rail-services/",type:"report"},
-   ]
+  {
+    id:"validation",
+    title:"Validation and Calibration",
+    body:"The Validation tab compares simulator predictions against real-world field measurements. Predictions are computed using the FULL simulation engine with the current user parameters (rail type, track form, speed, lubrication, strategy) - not a simplified sub-model. For each reference case, a synthetic train fleet is built to reproduce the measured MGT/yr. Reference cases: BE1 - Infrabel/TU Delft 2023, tangent R260, 25 MGT/yr (vertical wear 0.82 mm/100MGT). BE2 - same source, R500m R260, 25 MGT/yr (V=1.40, L=2.80 mm/100MGT). BE3 - same source, tangent R200, 25 MGT/yr (V=1.10 mm/100MGT). GZ1 - ScienceDirect Wear 2021, Guangzhou Metro R300m, 15 MGT/yr (V=2.10, L=6.50 mm/100MGT). GZ2 - Railway Sciences 2022, EMU depot R350m - marked incomparable because the published value (10.1mm lateral) is absolute wear after 1 million passes, not a mm/100MGT rate. Users can add their own field measurements to calibrate the model for their specific context."
   },
-  {id:"validation",title:"Validation and Calibration",
-   body:"PURPOSE: Compare simulator predictions against field measurements before using results for budget decisions.\n\nHOW IT WORKS: Predictions use the FULL engine with your current parameters. A synthetic train fleet reproduces the reference MGT/yr. No simplified sub-model.\n\nREFERENCE CASES:\n- BE1: Infrabel/TU Delft 2023, heavy, tangent, R260, 25 MGT/yr. V=0.82 mm/100MGT. Model calibration baseline.\n- BE2: Same source, R500m, R260, 25 MGT/yr. V=1.40, L=2.80. Tests curve wear factor model.\n- BE3: Same source, tangent, R200 grade, 25 MGT/yr. V=1.10. Tests hardness model.\n- GZ1: Guangzhou Metro 2021, R300m, R260, 15 MGT/yr. V=2.10, L=6.50. Tests metro context.\n- GZ2 (!): EMU depot R350m - INCOMPARABLE. 10.1mm lateral is absolute after 1M passes, not a rate.\n\nDEVIATION: Green <15% (good), Yellow 15-30% (review parameters), Red >30% (recalibrate for your context).",
-   links:[
-     {label:"Rooij L. et al. (2023) - Statistical analysis of rail wear, Belgian network, Wear 522",url:"https://doi.org/10.1016/j.wear.2022.204764",type:"paper"},
-     {label:"Liu B. et al. (2021) - Rail wear on Guangzhou Metro, Wear 477",url:"https://doi.org/10.1016/j.wear.2021.203830",type:"paper"},
-     {label:"Wang W.J. et al. (2022) - Wear of EMU depot track, Railway Sciences 1(2)",url:"https://doi.org/10.1007/s40534-022-00271-2",type:"paper"},
-     {label:"ASTM E2660 - Standard guide for wear measurement in railway track",url:"https://www.astm.org/e2660-09r14.html",type:"standard"},
-   ]
-  },
-  {id:"limits",title:"Known Limitations",
-   body:"VERSION 1.1 - Annual time step.\n\nNOT MODELLED:\n- Inner/outer rail asymmetry: outer rail always critical. Inner ~30-60% of outer rate. Workaround: add inner as separate segment with reduced f_L.\n- Wheel profile evolution over time.\n- Seasonal variation: autumn leaf fall +15-25% wear; winter ice alters friction mode.\n- Station braking/acceleration zones: 2-4x higher wear. Workaround: short segments (50-200m) with f_V x 1.5-3.0.\n- Switch and crossing wear: different mechanisms, not applicable.\n- Corrugation: short-pitch roughness requires separate dynamic model.\n\nSCOPE: Calibrated on European heavy rail (Belgium) and Chinese metro. For North American freight, Japanese HSL, or African narrow gauge, validate locally before budget use.\n\nCOST DATA: Rates based on 2022-2023. Exchange rates are indicative - update for financial planning.",
-   links:[
-     {label:"RSSB T1009 - Rail wear database (UK network)",url:"https://www.rssb.co.uk/research-catalogue/CatalogueItem/T1009",type:"report"},
-     {label:"FRA Track Safety Standards (US DOT)",url:"https://railroads.dot.gov/safety/track-safety/track-safety-standards",type:"standard"},
-     {label:"DB Netz Richtlinie 824 - Schienenverschleiss (Germany)",url:"https://www.dbinfrago.com/db-infrago/en/technical-standards",type:"standard"},
-     {label:"Esveld C. (2001) - Modern Railway Track, 2nd ed. (MRT Productions)",url:"https://www.mrt-productions.nl/",type:"book"},
-   ]
+  {
+    id:"limits",
+    title:"Known Limitations",
+    body:"Version 1.1 - Annual time step (sub-annual variations not modelled). Does not model: inner vs outer rail asymmetry within a curve (outer rail always critical); wheel profile evolution over time; seasonal variation (leaf fall, ice, humidity effects on friction); station braking and acceleration zones (add as short separate segments with increased f_V factor of 1.5-2.0 as a workaround); switch and crossing wear; corrugation. Calibrated primarily on European heavy rail (Infrabel) and Chinese metro (Guangzhou) data. For other contexts, use the Validation tab to add local measurements and adjust the base wear rate accordingly. Cost rates are indicative and based on 2022-2023 data - update with local contractor quotes before budget submission."
   },
 ];
-
-// ---- COMPARISON PANEL ----
-
-function ComparePanel(props) {
-  var simResult = props.simResult;    // current run (strategy as set by user)
-  var params    = props.params;       // all params needed to re-run
-  var horizon   = props.horizon;
-  var context   = props.context;
-
-  const [cmpResult, setCmp]   = useState(null);
-  const [running,   setRun]   = useState(false);
-  const [aidx,      setAi]    = useState(0);
-  const [chartTab,  setChTab] = useState("wear");
-  const [cmpParamsHash, setCmpHash] = useState(null);
-
-  // Simple hash to detect if params changed since last comparison
-  var paramsHash = params ? JSON.stringify({
-    context:   params.context,
-    trains:    params.trains,
-    strategy:  params.strategy,
-    railType:  params.railType,
-    trackMode: params.trackMode,
-    speed:     params.speed,
-    lubrication: params.lubrication,
-    horizonYears: params.horizonYears,
-    segKeys: (params.segments||[]).map(function(s){
-      return s.id+"_"+s.radius+"_"+s.railGrade+"_"+(s.initWearV||0)+"_"+(s.initRCF||0);
-    }).join("|"),
-  }) : null;
-
-  var isStale = cmpResult && cmpParamsHash && paramsHash && cmpParamsHash !== paramsHash;
-
-  // Determine which strategy is the "current" one
-  var curStrategy = params && params.strategy;
-  var altStrategy = curStrategy === "preventive" ? "corrective" : "preventive";
-  var prevResult  = curStrategy === "preventive" ? simResult   : cmpResult;
-  var corrResult  = curStrategy === "corrective" ? simResult   : cmpResult;
-
-  function runComparison() {
-    if (!params) return;
-    setRun(true);
-    try {
-      var r = runSim(Object.assign({}, params, { strategy: altStrategy }));
-      setCmp(r);
-      setCmpHash(paramsHash);
-      setAi(0);
-    } catch(e) { }
-    setRun(false);
-  }
-
-  var hasComparison = !!(prevResult && corrResult);
-  var sym = "EUR";
-
-  // Cost helpers - simplified estimate without cost panel state
-  function estimateReplCost(result) {
-    if (!result) return 0;
-    return result.results.reduce(function(a, r) {
-      if (!r.repY) return a;
-      var baseEur = 380; // EUR/ml rough estimate (WEU R260)
-      return a + (r.seg.lengthKm || 0) * 1000 * baseEur;
-    }, 0);
-  }
-  function estimateGrindCost(result) {
-    if (!result) return 0;
-    return result.results.reduce(function(a, r) {
-      var passes = r.data ? r.data.reduce(function(s,d){return s+d.ground;},0) : 0;
-      var baseEur = 22; // EUR/ml/pass rough estimate
-      return a + (r.seg.lengthKm || 0) * 1000 * passes * baseEur;
-    }, 0);
-  }
-
-  function fmt(v) {
-    if (v >= 1e6) return (v/1e6).toFixed(2)+"M EUR";
-    if (v >= 1e3) return (v/1e3).toFixed(1)+"k EUR";
-    return v.toFixed(0)+" EUR";
-  }
-  function fmtDelta(v) {
-    var s = v >= 0 ? "+" : "";
-    if (Math.abs(v) >= 1e6) return s+(v/1e6).toFixed(2)+"M EUR";
-    if (Math.abs(v) >= 1e3) return s+(v/1e3).toFixed(1)+"k EUR";
-    return s+v.toFixed(0)+" EUR";
-  }
-
-  // Per-segment comparison data
-  var segData = hasComparison ? prevResult.results.map(function(pr, i) {
-    var cr = corrResult.results[i];
-    if (!cr) return null;
-    var pPasses = pr.data ? pr.data.reduce(function(a,d){return a+d.ground;},0) : 0;
-    var cPasses = cr.data ? cr.data.reduce(function(a,d){return a+d.ground;},0) : 0;
-    var pRepl   = pr.repY || (horizon+1);
-    var cRepl   = cr.repY || (horizon+1);
-    var baseEur = 380;
-    var grindEur = 22;
-    var lenMl    = (pr.seg.lengthKm || 0) * 1000;
-    var pGrindCost = lenMl * pPasses * grindEur;
-    var cGrindCost = lenMl * cPasses * grindEur;
-    var pReplCost  = pr.repY ? lenMl * baseEur : 0;
-    var cReplCost  = cr.repY ? lenMl * baseEur : 0;
-    var pTotal     = pGrindCost + pReplCost;
-    var cTotal     = cGrindCost + cReplCost;
-    return {
-      seg: pr.seg, i: i,
-      prevData: pr.data, corrData: cr.data,
-      pPasses: pPasses, cPasses: cPasses,
-      pRepl: pr.repY, cRepl: cr.repY,
-      pGrindCost: pGrindCost, cGrindCost: cGrindCost,
-      pReplCost: pReplCost,  cReplCost: cReplCost,
-      pTotal: pTotal, cTotal: cTotal,
-      saving: cTotal - pTotal, // positive = preventive is cheaper
-    };
-  }).filter(Boolean) : [];
-
-  var totalPrev  = segData.reduce(function(a,s){return a+s.pTotal;},0);
-  var totalCorr  = segData.reduce(function(a,s){return a+s.cTotal;},0);
-  var totalSaving = totalCorr - totalPrev;
-  var prevRepls   = hasComparison ? prevResult.results.filter(function(r){return r.repY;}).length : 0;
-  var corrRepls   = hasComparison ? corrResult.results.filter(function(r){return r.repY;}).length : 0;
-
-  var asr     = segData[aidx];
-  var prevSeg = asr && asr.prevData;
-  var corrSeg = asr && asr.corrData;
-
-  // Merge year data for dual-line charts
-  function mergeData(pData, cData) {
-    if (!pData || !cData) return [];
-    var maxY = Math.max(pData.length, cData.length);
-    var out = [];
-    for (var y = 0; y < maxY; y++) {
-      var row = { year: (pData[y]||cData[y]).year };
-      if (pData[y]) { row.pV=pData[y].wearV; row.pL=pData[y].wearL; row.pRCF=pData[y].rcf; }
-      if (cData[y]) { row.cV=cData[y].wearV; row.cL=cData[y].wearL; row.cRCF=cData[y].rcf; }
-      out.push(row);
-    }
-    return out;
-  }
-
-  var chartData = asr ? mergeData(prevSeg, corrSeg) : [];
-
-  return (
-    <div>
-      {/* Header bar */}
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,padding:"12px 16px",background:"rgba(0,0,0,0.2)",borderRadius:10,border:"1px solid rgba(125,211,200,0.1)"}}>
-        <div>
-          <div style={{fontSize:13,fontWeight:700,color:"#e8f4f3"}}>Strategy Comparison: Preventive vs Corrective</div>
-          <div style={{fontSize:11,color:cl.dim,marginTop:3}}>
-            Current strategy: <b style={{color:cl.teal}}>{curStrategy}</b>
-            {cmpResult && <span> | Comparison run with: <b style={{color:cl.amber}}>{altStrategy}</b></span>}
-          </div>
-        </div>
-        <div style={{display:"flex",gap:10,alignItems:"center"}}>
-          {isStale && (
-            <div style={{fontSize:11,color:cl.amber,padding:"5px 10px",background:"rgba(251,191,36,0.1)",borderRadius:6,border:"1px solid rgba(251,191,36,0.3)"}}>
-              Parameters changed  -  re-run comparison
-            </div>
-          )}
-          <Btn onClick={runComparison} active={true} sm={false}>
-            {running ? "Computing..." : (cmpResult ? "Re-run Comparison" : "Run Comparison")}
-          </Btn>
-        </div>
-      </div>
-
-      {!cmpResult && (
-        <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:300,color:"#4a6a74",textAlign:"center",gap:14,border:"1px dashed rgba(125,211,200,0.12)",borderRadius:12}}>
-          <div style={{fontSize:32}}>vs</div>
-          <div style={{fontSize:14,fontWeight:600,color:cl.dim}}>Click "Run Comparison" to compute both strategies</div>
-          <div style={{fontSize:12,color:"#4a6a74",maxWidth:420}}>
-            The simulator will run with your current parameters using both strategies simultaneously.
-            Current strategy <b style={{color:cl.teal}}>{curStrategy}</b> is already computed from your last Run.
-          </div>
-        </div>
-      )}
-
-      {hasComparison && (
-        <div>
-          {/* Global KPI comparison */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:10,marginBottom:16}}>
-            {[
-              ["Replacements","Preventive",prevRepls+" segments",corrRepls+" segments", prevRepls<corrRepls?"preventive":"corrective"],
-              ["Total grindings","Preventive",
-                (prevResult.results.reduce(function(a,r){return a+r.gCount;},0))+" passes",
-                (corrResult.results.reduce(function(a,r){return a+r.gCount;},0))+" passes","preventive"],
-              ["Grind cost (est.)","Preventive",fmt(segData.reduce(function(a,s){return a+s.pGrindCost;},0)),fmt(segData.reduce(function(a,s){return a+s.cGrindCost;},0)),"corrective"],
-              ["Lifecycle cost (est.)","Preventive",fmt(totalPrev),fmt(totalCorr),totalPrev<totalCorr?"preventive":"corrective"],
-            ].map(function(item,i){
-              var lbl=item[0],winner=item[4],pVal=item[2],cVal=item[3];
-              return (
-                <div key={i} style={{background:"rgba(0,0,0,0.2)",borderRadius:10,padding:"12px 14px",border:"1px solid rgba(255,255,255,0.06)"}}>
-                  <div style={{fontSize:10,color:cl.muted,letterSpacing:2,textTransform:"uppercase",marginBottom:8}}>{lbl}</div>
-                  <div style={{display:"flex",gap:8,marginBottom:6}}>
-                    <div style={{flex:1,padding:"6px 10px",borderRadius:6,background:winner==="preventive"?"rgba(125,211,200,0.12)":"rgba(255,255,255,0.03)",border:"1px solid "+(winner==="preventive"?"rgba(125,211,200,0.3)":"rgba(255,255,255,0.06)")}}>
-                      <div style={{fontSize:9,color:cl.teal,fontWeight:700,textTransform:"uppercase",marginBottom:3}}>Preventive</div>
-                      <div style={{fontSize:14,fontWeight:700,color:cl.teal,fontFamily:"monospace"}}>{pVal}</div>
-                    </div>
-                    <div style={{flex:1,padding:"6px 10px",borderRadius:6,background:winner==="corrective"?"rgba(251,191,36,0.12)":"rgba(255,255,255,0.03)",border:"1px solid "+(winner==="corrective"?"rgba(251,191,36,0.3)":"rgba(255,255,255,0.06)")}}>
-                      <div style={{fontSize:9,color:cl.amber,fontWeight:700,textTransform:"uppercase",marginBottom:3}}>Corrective</div>
-                      <div style={{fontSize:14,fontWeight:700,color:cl.amber,fontFamily:"monospace"}}>{cVal}</div>
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-
-          {/* Lifecycle saving banner */}
-          <div style={{marginBottom:16,padding:"14px 18px",borderRadius:10,background:totalSaving>0?"rgba(125,211,200,0.06)":"rgba(248,113,113,0.06)",border:"1px solid "+(totalSaving>0?"rgba(125,211,200,0.25)":"rgba(248,113,113,0.25)"),display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-            <div>
-              <div style={{fontSize:12,color:totalSaving>0?cl.teal:cl.warn,fontWeight:700,marginBottom:4}}>
-                {totalSaving>0?"Preventive strategy is cheaper over "+horizon+" years":"Corrective strategy is cheaper over "+horizon+" years"}
-              </div>
-              <div style={{fontSize:11,color:cl.dim}}>Estimated lifecycle cost difference (grinding + replacement, WEU reference rates)</div>
-            </div>
-            <div style={{fontSize:28,fontWeight:800,color:totalSaving>0?cl.teal:cl.warn,fontFamily:"monospace"}}>{fmtDelta(totalSaving)}</div>
-          </div>
-
-          {/* Segment selector */}
-          <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
-            {segData.map(function(s,i){return(
-              <Btn key={i} onClick={function(){setAi(i);}} active={aidx===i} sm={true}>{s.seg.label}</Btn>
-            );})}
-          </div>
-
-          {/* Chart tabs */}
-          <div style={{display:"flex",gap:6,marginBottom:12}}>
-            {[["wear","Wear V and L"],["rcf","RCF Index"],["cost","Lifecycle Cost"]].map(function(item){
-              return <Btn key={item[0]} onClick={function(){setChTab(item[0]);}} active={chartTab===item[0]} sm={true}>{item[1]}</Btn>;
-            })}
-          </div>
-
-          <div style={{background:"rgba(0,0,0,0.2)",borderRadius:12,padding:18,border:"1px solid rgba(125,211,200,0.1)",marginBottom:16}}>
-
-            {chartTab==="wear" && asr && (
-              <div>
-                <div style={{fontSize:12,color:cl.dim,marginBottom:12,display:"flex",gap:20}}>
-                  <span>Vertical wear - <b style={{color:cl.teal}}>Preventive</b> vs <b style={{color:cl.amber}}>Corrective</b></span>
-                  <span>Limit: <b style={{color:cl.warn}}>{asr.seg.label} {LIMITS[context]&&LIMITS[context].v}mm V / {LIMITS[context]&&LIMITS[context].l}mm L</b></span>
-                </div>
-                <ResponsiveContainer width="100%" height={260}>
-                  <AreaChart data={chartData}>
-                    <defs>
-                      <linearGradient id="gpV" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={cl.teal} stopOpacity={0.25}/><stop offset="95%" stopColor={cl.teal} stopOpacity={0}/></linearGradient>
-                      <linearGradient id="gcV" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={cl.amber} stopOpacity={0.25}/><stop offset="95%" stopColor={cl.amber} stopOpacity={0}/></linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)"/>
-                    <XAxis dataKey="year" stroke="#4a6a74" tick={{fontSize:11}}/>
-                    <YAxis stroke="#4a6a74" tick={{fontSize:11}} unit=" mm"/>
-                    <Tooltip content={<Tip/>}/>
-                    <Legend wrapperStyle={{fontSize:12}}/>
-                    <ReferenceLine y={LIMITS[context]&&LIMITS[context].v} stroke={cl.warn} strokeDasharray="4 3" label={{value:"V limit",fill:cl.warn,fontSize:10}}/>
-                    <Area type="monotone" dataKey="pV" name="Preventive V (mm)" stroke={cl.teal}  fill="url(#gpV)" strokeWidth={2} dot={false} connectNulls={true}/>
-                    <Area type="monotone" dataKey="cV" name="Corrective V (mm)"  stroke={cl.amber} fill="url(#gcV)" strokeWidth={2} dot={false} strokeDasharray="6 3" connectNulls={true}/>
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {chartTab==="rcf" && asr && (
-              <div>
-                <div style={{fontSize:12,color:cl.dim,marginBottom:12}}>RCF Index - <b style={{color:cl.teal}}>Preventive</b> vs <b style={{color:cl.amber}}>Corrective</b> - Limit: 0.70</div>
-                <ResponsiveContainer width="100%" height={260}>
-                  <AreaChart data={chartData}>
-                    <defs>
-                      <linearGradient id="gpR" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={cl.teal} stopOpacity={0.2}/><stop offset="95%" stopColor={cl.teal} stopOpacity={0}/></linearGradient>
-                      <linearGradient id="gcR" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor={cl.amber} stopOpacity={0.2}/><stop offset="95%" stopColor={cl.amber} stopOpacity={0}/></linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)"/>
-                    <XAxis dataKey="year" stroke="#4a6a74" tick={{fontSize:11}}/>
-                    <YAxis stroke="#4a6a74" tick={{fontSize:11}} domain={[0,1]}/>
-                    <Tooltip content={<Tip/>}/>
-                    <Legend wrapperStyle={{fontSize:12}}/>
-                    <ReferenceLine y={0.3} stroke={cl.green} strokeDasharray="4 4" label={{value:"Preventive OK",fill:cl.green,fontSize:10}}/>
-                    <ReferenceLine y={0.7} stroke={cl.warn}  strokeDasharray="4 4" label={{value:"Replacement",fill:cl.warn,fontSize:10}}/>
-                    <Area type="monotone" dataKey="pRCF" name="Preventive RCF" stroke={cl.teal}  fill="url(#gpR)" strokeWidth={2} dot={false} connectNulls={true}/>
-                    <Area type="monotone" dataKey="cRCF" name="Corrective RCF"  stroke={cl.amber} fill="url(#gcR)" strokeWidth={2} dot={false} strokeDasharray="6 3" connectNulls={true}/>
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {chartTab==="cost" && (
-              <div>
-                <div style={{fontSize:12,color:cl.dim,marginBottom:14}}>Lifecycle cost breakdown (estimated - WEU reference rates, EUR/ml: grinding=22, replacement=380)</div>
-                <div style={{overflowX:"auto"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                    <thead>
-                      <tr style={{background:"rgba(255,255,255,0.03)"}}>
-                        {["Segment","Repl. yr PREV","Repl. yr CORR","Delta yr","Passes PREV","Passes CORR","Grind cost PREV","Grind cost CORR","Repl. cost PREV","Repl. cost CORR","Total PREV","Total CORR","Saving (PREV vs CORR)"].map(function(h){
-                          return <th key={h} style={{padding:"7px 10px",textAlign:"left",color:cl.dim,fontWeight:600,whiteSpace:"nowrap",fontSize:10}}>{h}</th>;
-                        })}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {segData.map(function(s,i){
-                        var deltaYr = (s.cRepl||(horizon+1)) - (s.pRepl||(horizon+1));
-                        var savCol = s.saving>0?cl.teal:s.saving<0?cl.warn:cl.dim;
-                        return(
-                          <tr key={i} onClick={function(){setAi(i);setChTab("wear");}} style={{borderTop:"1px solid rgba(255,255,255,0.04)",cursor:"pointer",background:aidx===i?"rgba(125,211,200,0.04)":"transparent"}}>
-                            <td style={{padding:"7px 10px",color:"#e8f4f3",fontWeight:500,whiteSpace:"nowrap"}}>{s.seg.label}</td>
-                            <td style={{padding:"7px 10px",fontFamily:"monospace",color:cl.teal}}>{s.pRepl?"Yr "+s.pRepl:"> "+horizon+"yr"}</td>
-                            <td style={{padding:"7px 10px",fontFamily:"monospace",color:cl.amber}}>{s.cRepl?"Yr "+s.cRepl:"> "+horizon+"yr"}</td>
-                            <td style={{padding:"7px 10px",fontFamily:"monospace",color:deltaYr>0?cl.teal:deltaYr<0?cl.warn:cl.dim,fontWeight:700}}>{deltaYr>0?"+":""}{deltaYr!==0?deltaYr+"yr":"="}</td>
-                            <td style={{padding:"7px 10px",fontFamily:"monospace",color:cl.teal}}>{s.pPasses}</td>
-                            <td style={{padding:"7px 10px",fontFamily:"monospace",color:cl.amber}}>{s.cPasses}</td>
-                            <td style={{padding:"7px 10px",fontFamily:"monospace"}}>{fmt(s.pGrindCost)}</td>
-                            <td style={{padding:"7px 10px",fontFamily:"monospace"}}>{fmt(s.cGrindCost)}</td>
-                            <td style={{padding:"7px 10px",fontFamily:"monospace"}}>{s.pReplCost>0?fmt(s.pReplCost):"-"}</td>
-                            <td style={{padding:"7px 10px",fontFamily:"monospace"}}>{s.cReplCost>0?fmt(s.cReplCost):"-"}</td>
-                            <td style={{padding:"7px 10px",fontFamily:"monospace",color:cl.teal,fontWeight:700}}>{fmt(s.pTotal)}</td>
-                            <td style={{padding:"7px 10px",fontFamily:"monospace",color:cl.amber,fontWeight:700}}>{fmt(s.cTotal)}</td>
-                            <td style={{padding:"7px 10px",fontFamily:"monospace",color:savCol,fontWeight:700}}>{fmtDelta(s.saving)}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    <tfoot>
-                      <tr style={{borderTop:"2px solid rgba(125,211,200,0.2)",background:"rgba(125,211,200,0.04)"}}>
-                        <td colSpan={10} style={{padding:"9px 10px",color:cl.teal,fontWeight:700,fontSize:12}}>TOTAL</td>
-                        <td style={{padding:"9px 10px",fontFamily:"monospace",color:cl.teal,fontWeight:800}}>{fmt(totalPrev)}</td>
-                        <td style={{padding:"9px 10px",fontFamily:"monospace",color:cl.amber,fontWeight:800}}>{fmt(totalCorr)}</td>
-                        <td style={{padding:"9px 10px",fontFamily:"monospace",color:totalSaving>0?cl.teal:cl.warn,fontWeight:800,fontSize:14}}>{fmtDelta(totalSaving)}</td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
-                <div style={{marginTop:10,fontSize:11,color:"#4a6a74"}}>
-                  Cost rates are indicative WEU estimates (grinding ~22 EUR/ml/pass, replacement ~380 EUR/ml). Use the Replacement Cost and Grinding Cost tabs for precise project-specific figures.
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 function HelpModal(props){
   const [tab, setTab] = useState("overview");
   var sec=HELP.find(function(h){return h.id===tab;});
-  var linkTypeColor={paper:cl.teal,standard:cl.amber,report:cl.purple,book:"#60a5fa"};
-  var linkTypeLabel={paper:"Paper",standard:"Standard",report:"Report",book:"Book"};
   return(
     <div style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.8)",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",justifyContent:"center",padding:40}}>
-      <div style={{background:"linear-gradient(160deg,#0d1f2a,#0a1820)",border:"1px solid rgba(125,211,200,0.2)",borderRadius:16,width:"100%",maxWidth:900,maxHeight:"85vh",display:"flex",flexDirection:"column",boxShadow:"0 32px 80px rgba(0,0,0,0.6)"}}>
+      <div style={{background:"linear-gradient(160deg,#0d1f2a,#0a1820)",border:"1px solid rgba(125,211,200,0.2)",borderRadius:16,width:"100%",maxWidth:860,maxHeight:"80vh",display:"flex",flexDirection:"column",boxShadow:"0 32px 80px rgba(0,0,0,0.6)"}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"18px 24px",borderBottom:"1px solid rgba(125,211,200,0.12)",flexShrink:0}}>
-          <div>
-            <div style={{fontSize:10,letterSpacing:3,color:cl.teal,fontWeight:700,textTransform:"uppercase"}}>Rail Wear Simulator v1.1</div>
-            <div style={{fontSize:18,fontWeight:800,color:"#e8f4f3"}}>Documentation, Methodology and Sources</div>
-          </div>
+          <div><div style={{fontSize:10,letterSpacing:3,color:cl.teal,fontWeight:700,textTransform:"uppercase"}}>Rail Wear Simulator</div><div style={{fontSize:18,fontWeight:800,color:"#e8f4f3"}}>Documentation and Methodology</div></div>
           <button onClick={props.onClose} style={{background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,color:cl.text,cursor:"pointer",width:34,height:34,fontSize:16,display:"flex",alignItems:"center",justifyContent:"center"}}>x</button>
         </div>
         <div style={{display:"flex",flex:1,overflow:"hidden"}}>
-          <div style={{width:185,flexShrink:0,borderRight:"1px solid rgba(125,211,200,0.08)",padding:"10px 8px",overflowY:"auto"}}>
+          <div style={{width:180,flexShrink:0,borderRight:"1px solid rgba(125,211,200,0.08)",padding:"12px 8px",overflowY:"auto"}}>
             {HELP.map(function(h){return(
-              <div key={h.id} onClick={function(){setTab(h.id);}} style={{padding:"7px 10px",borderRadius:7,cursor:"pointer",background:tab===h.id?"rgba(125,211,200,0.1)":"transparent",borderLeft:"3px solid "+(tab===h.id?cl.teal:"transparent"),marginBottom:2}}>
+              <div key={h.id} onClick={function(){setTab(h.id);}} style={{padding:"8px 10px",borderRadius:8,cursor:"pointer",background:tab===h.id?"rgba(125,211,200,0.1)":"transparent",borderLeft:"3px solid "+(tab===h.id?cl.teal:"transparent"),marginBottom:3}}>
                 <span style={{fontSize:11,color:tab===h.id?"#e8f4f3":cl.dim,fontWeight:tab===h.id?600:400}}>{h.title}</span>
               </div>
             );})}
           </div>
-          <div style={{flex:1,overflowY:"auto",padding:"22px 26px"}}>
-            <div style={{fontSize:20,fontWeight:700,color:"#e8f4f3",marginBottom:14}}>{sec&&sec.title}</div>
-            <div style={{fontSize:12,color:"#a0bfbb",lineHeight:2.0,whiteSpace:"pre-line",marginBottom:20}}>{sec&&sec.body}</div>
-            {sec&&sec.links&&sec.links.length>0&&(
-              <div>
-                <div style={{fontSize:10,letterSpacing:3,color:cl.teal,fontWeight:700,textTransform:"uppercase",marginBottom:10}}>Sources and References</div>
-                <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                  {sec.links.map(function(lk,i){
-                    var col=linkTypeColor[lk.type]||cl.dim;
-                    var lbl=linkTypeLabel[lk.type]||"Link";
-                    return(
-                      <a key={i} href={lk.url} target="_blank" rel="noopener noreferrer"
-                        style={{display:"flex",alignItems:"flex-start",gap:10,padding:"8px 12px",background:"rgba(255,255,255,0.03)",borderRadius:7,border:"1px solid rgba(255,255,255,0.07)",textDecoration:"none",cursor:"pointer"}}>
-                        <span style={{fontSize:9,fontWeight:700,color:col,background:col+"18",border:"1px solid "+col+"44",borderRadius:3,padding:"2px 6px",whiteSpace:"nowrap",marginTop:1,flexShrink:0,letterSpacing:1,textTransform:"uppercase"}}>{lbl}</span>
-                        <span style={{fontSize:12,color:"#c8ddd9",lineHeight:1.5}}>{lk.label}</span>
-                        <span style={{fontSize:10,color:"#3a5a64",marginLeft:"auto",flexShrink:0,marginTop:2}}>ext</span>
-                      </a>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+          <div style={{flex:1,overflowY:"auto",padding:"24px 28px"}}>
+            <div style={{fontSize:22,fontWeight:700,color:"#e8f4f3",marginBottom:16}}>{sec&&sec.title}</div>
+            <p style={{fontSize:13,color:"#a0bfbb",lineHeight:1.9}}>{sec&&sec.body}</p>
           </div>
         </div>
-        <div style={{padding:"10px 24px",borderTop:"1px solid rgba(125,211,200,0.08)",fontSize:11,color:"#3a5a64",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
-          <span>v1.1 - EN 13674 / UIC 714 / Infrabel 2023 / Guangzhou 2021 - Created by Mohamed BOUDIA</span>
+        <div style={{padding:"12px 24px",borderTop:"1px solid rgba(125,211,200,0.08)",fontSize:11,color:"#3a5a64",display:"flex",justifyContent:"space-between",flexShrink:0}}>
+          <span>v1.1 - EN 13674 / UIC 714 / Infrabel/TU Delft 2023 / Guangzhou Metro 2021</span>
           <span style={{color:cl.dim,cursor:"pointer"}} onClick={props.onClose}>Close</span>
         </div>
       </div>
@@ -1675,9 +1262,7 @@ export default function App() {
   const [ctab,     setCt]   = useState("wear");
   const [hasRun,   setHR]   = useState(false);
   const [err,      setErr]  = useState(null);
-  const [showHelp,    setHelp]    = useState(false);
-  const [showReport,  setShowRpt] = useState(false);
-  const [projectName, setProjName]= useState("");
+  const [showHelp, setHelp] = useState(false);
 
   function addTrain(){setTr(function(t){return t.concat([{id:Date.now(),label:"Type "+String.fromCharCode(65+t.length),trainsPerDay:100,axleLoad:14,bogies:4,axlesPerBogie:2}]);});}
   function delTrain(id){setTr(function(t){return t.filter(function(x){return x.id!==id;});});}
@@ -1703,468 +1288,6 @@ export default function App() {
   var asr=result&&result.results[aidx];
   var gp={railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,strategy:strategy};
 
-  function generatePDF() {
-    var script = document.createElement("script");
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-    script.onload = function() {
-      var doc = new window.jspdf.jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-      var W=210, H=297;
-      var ml=15, mr=15, mt=15; // margins
-      var cw = W - ml - mr;    // content width
-      var y = mt;
-      var today = new Date().toLocaleDateString("en-GB");
-      var pName = projectName || "Unnamed Project";
-
-      // ---- COLORS ----
-      var TEAL   = [125,211,200];
-      var AMBER  = [251,191,36];
-      var WARN   = [248,113,113];
-      var GREEN  = [74,222,128];
-      var DARK   = [13,26,34];
-      var LIGHT  = [200,221,217];
-      var MUTED  = [136,153,170];
-      var WHITE  = [255,255,255];
-
-      // ---- HELPERS ----
-      function newPage() {
-        doc.addPage();
-        y = mt;
-        // subtle header bar
-        doc.setFillColor.apply(doc, DARK);
-        doc.rect(0,0,W,8,"F");
-        doc.setFontSize(7); doc.setTextColor.apply(doc, MUTED);
-        doc.text(pName, ml, 5.5);
-        doc.text("Rail Wear Simulator v1.1 - Mohamed BOUDIA", W-mr, 5.5, {align:"right"});
-        y = 14;
-      }
-
-      function checkY(needed) { if (y + needed > H - 15) { newPage(); } }
-
-      function sectionTitle(txt) {
-        checkY(12);
-        doc.setFillColor.apply(doc, TEAL);
-        doc.rect(ml, y, cw, 7, "F");
-        doc.setFontSize(10); doc.setFont("helvetica","bold");
-        doc.setTextColor.apply(doc, DARK);
-        doc.text(txt, ml+3, y+5);
-        y += 10;
-        doc.setFont("helvetica","normal");
-      }
-
-      function subTitle(txt) {
-        checkY(8);
-        doc.setFontSize(9); doc.setFont("helvetica","bold");
-        doc.setTextColor.apply(doc, TEAL);
-        doc.text(txt, ml, y+4);
-        doc.setFont("helvetica","normal");
-        y += 7;
-      }
-
-      function bodyText(txt, indent) {
-        var x = ml + (indent||0);
-        doc.setFontSize(8); doc.setTextColor.apply(doc, LIGHT);
-        var lines2 = doc.splitTextToSize(txt, cw - (indent||0));
-        checkY(lines2.length * 4 + 2);
-        doc.text(lines2, x, y);
-        y += lines2.length * 4 + 2;
-      }
-
-      function kpiRow(items) {
-        // items = [{label, value, unit, color}]
-        checkY(16);
-        var colW = cw / items.length;
-        items.forEach(function(item, i) {
-          var x = ml + i*colW;
-          var col = item.color || TEAL;
-          doc.setFillColor(col[0]*0.15+20, col[1]*0.15+20, col[2]*0.15+20);
-          doc.setDrawColor.apply(doc, col);
-          doc.roundedRect(x+1, y, colW-2, 14, 1.5, 1.5, "FD");
-          doc.setFontSize(7); doc.setTextColor.apply(doc, MUTED);
-          doc.text(item.label.toUpperCase(), x + colW/2, y+4, {align:"center"});
-          doc.setFontSize(10); doc.setFont("helvetica","bold");
-          doc.setTextColor.apply(doc, col);
-          doc.text(String(item.value), x + colW/2, y+10, {align:"center"});
-          doc.setFontSize(7); doc.setFont("helvetica","normal");
-          doc.setTextColor.apply(doc, MUTED);
-          if(item.unit) doc.text(item.unit, x + colW/2, y+13, {align:"center"});
-        });
-        y += 17;
-      }
-
-      function tableHeader(cols) {
-        // cols = [{label, w, align}]
-        checkY(8);
-        doc.setFillColor(25,45,55);
-        doc.rect(ml, y, cw, 6, "F");
-        doc.setFontSize(7); doc.setFont("helvetica","bold");
-        doc.setTextColor.apply(doc, TEAL);
-        var x = ml;
-        cols.forEach(function(col) {
-          var align = col.align || "left";
-          var tx = align==="right" ? x+col.w-1 : x+1;
-          doc.text(col.label, tx, y+4, {align:align==="right"?"right":"left"});
-          x += col.w;
-        });
-        doc.setFont("helvetica","normal");
-        y += 6;
-        return cols;
-      }
-
-      function tableRow(cols, vals, shade) {
-        checkY(6);
-        if(shade) { doc.setFillColor(18,35,44); doc.rect(ml,y,cw,5.5,"F"); }
-        doc.setFontSize(7); doc.setTextColor.apply(doc, LIGHT);
-        var x = ml;
-        cols.forEach(function(col, i) {
-          var val = String(vals[i]||"-");
-          var align = col.align || "left";
-          var col_color = col.color_fn ? col.color_fn(vals[i]) : null;
-          if(col_color) doc.setTextColor.apply(doc, col_color);
-          else doc.setTextColor.apply(doc, LIGHT);
-          var tx = align==="right" ? x+col.w-1 : x+1;
-          doc.text(val, tx, y+4, {align:align==="right"?"right":"left"});
-          x += col.w;
-        });
-        y += 5.5;
-      }
-
-      function tableDivider() {
-        doc.setDrawColor(30,55,65);
-        doc.line(ml, y, ml+cw, y);
-        y += 0.5;
-      }
-
-      function miniBarChart(data, dataKey, color, limitY, labelY) {
-        // Simple bar chart using jsPDF rectangles
-        checkY(36);
-        var chartH = 28, chartW = cw;
-        var n = data.length;
-        if(n===0) return;
-        var maxVal = limitY || Math.max.apply(null, data.map(function(d){return d[dataKey]||0;}));
-        if(maxVal===0) maxVal=1;
-
-        // Background
-        doc.setFillColor(13,26,34);
-        doc.rect(ml, y, chartW, chartH, "F");
-        // Limit line
-        doc.setDrawColor.apply(doc, WARN);
-        doc.setLineWidth(0.3);
-        var limitPx = chartH - (limitY/maxVal)*chartH*0.9;
-        if(limitY && limitY <= maxVal) {
-          doc.line(ml, y+limitPx, ml+chartW, y+limitPx);
-          doc.setFontSize(6); doc.setTextColor.apply(doc, WARN);
-          doc.text(labelY||"Limit", ml+chartW-1, y+limitPx-1, {align:"right"});
-        }
-        // Bars
-        var barW = Math.max(0.5, chartW/n - 0.3);
-        doc.setFillColor.apply(doc, color);
-        data.forEach(function(d,i) {
-          var val = d[dataKey]||0;
-          var bH = (val/maxVal)*chartH*0.88;
-          var bX = ml + i*(chartW/n);
-          doc.rect(bX, y+chartH-bH, barW, bH, "F");
-        });
-        // Year labels (every 5)
-        doc.setFontSize(5.5); doc.setTextColor.apply(doc, MUTED);
-        data.forEach(function(d,i) {
-          if(d.year%5===0) {
-            doc.text(String(d.year), ml+i*(chartW/n)+barW/2, y+chartH+3, {align:"center"});
-          }
-        });
-        doc.setFontSize(6); doc.setTextColor.apply(doc, MUTED);
-        doc.text("Year", ml+chartW/2, y+chartH+5, {align:"center"});
-        y += chartH + 7;
-      }
-
-      function fmt(v) {
-        if(v>=1e6) return (v/1e6).toFixed(2)+"M EUR";
-        if(v>=1e3) return (v/1e3).toFixed(1)+"k EUR";
-        return v.toFixed(0)+" EUR";
-      }
-
-      // ==============================
-      // PAGE 1 - COVER
-      // ==============================
-      doc.setFillColor.apply(doc, DARK);
-      doc.rect(0, 0, W, H, "F");
-      // Accent bar
-      doc.setFillColor.apply(doc, TEAL);
-      doc.rect(0, 0, 6, H, "F");
-      // Title block
-      doc.setFontSize(26); doc.setFont("helvetica","bold");
-      doc.setTextColor.apply(doc, WHITE);
-      doc.text("Rail Wear &", ml+10, 60);
-      doc.text("Maintenance Report", ml+10, 74);
-      doc.setFontSize(13); doc.setFont("helvetica","normal");
-      doc.setTextColor.apply(doc, TEAL);
-      doc.text("Simulation Results and Lifecycle Cost Analysis", ml+10, 85);
-
-      // Project info box
-      doc.setFillColor(18,35,44);
-      doc.roundedRect(ml+8, 100, cw-8, 50, 2, 2, "F");
-      doc.setFontSize(9); doc.setFont("helvetica","bold");
-      doc.setTextColor.apply(doc, TEAL);
-      doc.text("PROJECT", ml+14, 112);
-      doc.setFontSize(12); doc.setTextColor.apply(doc, WHITE);
-      doc.text(pName, ml+14, 121);
-      doc.setFontSize(8); doc.setFont("helvetica","normal");
-      doc.setTextColor.apply(doc, MUTED);
-      doc.text("Context: "+CONTEXTS[context].label, ml+14, 131);
-      doc.text("Simulation horizon: "+horizon+" years", ml+14, 137);
-      doc.text("Strategy: "+strategy.charAt(0).toUpperCase()+strategy.slice(1), ml+14, 143);
-      doc.text("Date: "+today, ml+14, 149);
-
-      // Quick stats
-      if(result) {
-        var repSegs = result.results.filter(function(r){return r.repY;}).length;
-        var totGrind = result.results.reduce(function(a,r){return a+r.gCount;},0);
-        doc.setFontSize(9); doc.setFont("helvetica","bold");
-        doc.setTextColor.apply(doc, AMBER);
-        doc.text("SUMMARY", ml+14, 165);
-        doc.setFont("helvetica","normal"); doc.setFontSize(8);
-        doc.setTextColor.apply(doc, LIGHT);
-        doc.text("Active segments: "+result.results.length, ml+14, 173);
-        doc.text("Replacements in horizon: "+repSegs+"/"+result.results.length, ml+14, 179);
-        doc.text("Total grinding passes: "+totGrind, ml+14, 185);
-        doc.text("Gross MGT/yr: "+result.mgtPY.toFixed(2)+" MGT", ml+14, 191);
-      }
-
-      // Footer
-      doc.setFontSize(7); doc.setTextColor.apply(doc, MUTED);
-      doc.text("Created by Mohamed BOUDIA | Rail Wear Simulator v1.1", ml+10, H-18);
-      doc.text("EN 13674-1 / UIC 714 / Infrabel/TU Delft 2023 / Guangzhou Metro 2021", ml+10, H-13);
-      doc.text("Page 1", W-mr, H-8, {align:"right"});
-
-      // ==============================
-      // PAGE 2 - PROJECT PARAMETERS
-      // ==============================
-      newPage();
-      sectionTitle("1. Project Parameters");
-
-      subTitle("1.1 Context and Global Settings");
-      var globalRows = [
-        ["Context", CONTEXTS[context].label],
-        ["Rail Type", RAIL_TYPES[railType].label],
-        ["Track Form", TRACK_MODES[trackMode].label],
-        ["Line Speed", speed+" km/h"],
-        ["Flange Lubrication", LUBRICATION[lubr].label],
-        ["Maintenance Strategy", strategy.charAt(0).toUpperCase()+strategy.slice(1)],
-        ["Simulation Horizon", horizon+" years"],
-        ["Brownfield Mode", isBF?"Enabled (existing rail)":"Disabled (new rail)"],
-      ];
-      var gCols = [{label:"Parameter",w:60},{label:"Value",w:cw-60}];
-      tableHeader(gCols);
-      globalRows.forEach(function(row,i){ tableRow(gCols,[row[0],row[1]],i%2===0); });
-      tableDivider(); y+=4;
-
-      subTitle("1.2 Train Fleet");
-      var tCols = [{label:"Type",w:30},{label:"Passes/day",w:25,align:"right"},{label:"Axle load (t)",w:28,align:"right"},{label:"Bogies",w:20,align:"right"},{label:"Axles/bogie",w:25,align:"right"},{label:"MGT/yr",w:cw-128,align:"right"}];
-      tableHeader(tCols);
-      trains.forEach(function(tr,i){
-        var mgt = ((tr.trainsPerDay*tr.axleLoad*tr.bogies*tr.axlesPerBogie*365)/1e6).toFixed(2);
-        tableRow(tCols,[tr.label,tr.trainsPerDay,tr.axleLoad,tr.bogies,tr.axlesPerBogie,mgt],i%2===0);
-      });
-      tableDivider();
-      var totalMGT = calcMGT(trains).toFixed(2);
-      var totalEqMGT = calcEqMGT(trains,context).toFixed(2);
-      checkY(8);
-      doc.setFontSize(7); doc.setFont("helvetica","bold");
-      doc.setTextColor.apply(doc,TEAL);
-      doc.text("Total: "+totalMGT+" MGT/yr gross | "+totalEqMGT+" MGT/yr equivalent", ml+1, y+4);
-      doc.setFont("helvetica","normal"); y+=8;
-
-      subTitle("1.3 Track Segments");
-      var sCols = [{label:"Segment",w:35},{label:"Radius (m)",w:22,align:"right"},{label:"Length (km)",w:24,align:"right"},{label:"Grade",w:20},{label:"fV",w:12,align:"right"},{label:"fL",w:12,align:"right"},{label:"Init.wearV",w:22,align:"right"},{label:"Init.RCF",w:18,align:"right"},{label:"Active",w:cw-165}];
-      tableHeader(sCols);
-      segs.forEach(function(seg,i){
-        var rb = BANDS.find(function(b){return b.id===seg.id;});
-        var ic = initCond[seg.id]||{wearV:0,rcf:0};
-        tableRow(sCols,[
-          seg.label,
-          seg.repr>=9000?"tangent":seg.repr,
-          seg.lengthKm.toFixed(1),
-          seg.grade,
-          rb?rb.f_v:"-",
-          rb?rb.f_l:"-",
-          isBF?ic.wearV.toFixed(1)+"mm":"-",
-          isBF?ic.rcf.toFixed(2):"-",
-          seg.active&&seg.lengthKm>0?"Yes":"No",
-        ],i%2===0);
-      });
-      tableDivider(); y+=4;
-
-      // ==============================
-      // PAGE 3+ - RESULTS PER SEGMENT
-      // ==============================
-      if(result) {
-        result.results.forEach(function(r, si) {
-          newPage();
-          sectionTitle("2."+(si+1)+" Segment: "+r.seg.label);
-          var lim = r.limits;
-
-          // KPIs
-          kpiRow([
-            {label:"Wear rate V",  value:r.wrV.toFixed(3), unit:"mm/100MGT", color:TEAL},
-            {label:"Wear rate L",  value:r.wrL.toFixed(3), unit:"mm/100MGT", color:AMBER},
-            {label:"Replacement",  value:r.repY?"Yr "+r.repY:"> "+horizon+" yrs", unit:"", color:r.repY?WARN:GREEN},
-            {label:"Grindings",    value:r.gCount,          unit:"passes",   color:TEAL},
-            {label:"Final RCF",    value:r.data.length?r.data[r.data.length-1].rcf.toFixed(2):"-", unit:"", color:MUTED},
-          ]);
-
-          // Wear chart
-          subTitle("Vertical Wear Progression (mm)");
-          miniBarChart(r.data, "wearV", TEAL, lim.v, "V="+lim.v+"mm");
-
-          // RCF chart
-          subTitle("RCF Index Progression");
-          miniBarChart(r.data, "rcf", WARN, 0.70, "Limit=0.70");
-
-          // Annual data table (every 2 years to save space)
-          subTitle("Annual Data (every 2 years)");
-          var dCols = [
-            {label:"Year",w:16,align:"right"},
-            {label:"MGT acc.",w:22,align:"right"},
-            {label:"Wear V (mm)",w:26,align:"right"},
-            {label:"Wear L (mm)",w:26,align:"right"},
-            {label:"RCF",w:18,align:"right"},
-            {label:"Reserve (mm)",w:28,align:"right"},
-            {label:"Ground",w:18,align:"right"},
-            {label:"Replaced",w:cw-154,align:"right"},
-          ];
-          tableHeader(dCols);
-          r.data.forEach(function(d,i){
-            if(i%2===0||d.ground||d.replaced) {
-              tableRow(dCols,[
-                d.year, d.mgt,
-                d.wearV.toFixed(2), d.wearL.toFixed(2),
-                d.rcf.toFixed(2), d.reserve.toFixed(1),
-                d.ground?"Yes":"-", d.replaced?"REPLACED":"-",
-              ],i%2===0);
-            }
-          });
-          tableDivider();
-        });
-      }
-
-      // ==============================
-      // COST SUMMARY PAGE
-      // ==============================
-      newPage();
-      sectionTitle("3. Lifecycle Cost Summary (WEU Reference Rates)");
-      bodyText("Note: Costs are estimated using WEU reference rates (grinding: 22 EUR/ml/pass, replacement: 380 EUR/ml). For project-specific figures, use the Replacement Cost and Grinding Cost tabs.");
-      y+=4;
-
-      if(result) {
-        var costCols = [
-          {label:"Segment",w:38},
-          {label:"Grade",w:20},
-          {label:"Length (km)",w:24,align:"right"},
-          {label:"Repl. Yr",w:18,align:"right"},
-          {label:"Grindings",w:20,align:"right"},
-          {label:"Grind cost",w:28,align:"right"},
-          {label:"Repl. cost",w:28,align:"right"},
-          {label:"Total",w:cw-176,align:"right"},
-        ];
-        tableHeader(costCols);
-        var grandGrind=0, grandRepl=0;
-        result.results.forEach(function(r,i){
-          var grade = r.seg.grade||r.seg.railGrade||"R260";
-          var lenMl = (r.seg.lengthKm||0)*1000;
-          var passes = r.data?r.data.reduce(function(a,d){return a+d.ground;},0):0;
-          var gCost = lenMl*passes*22;
-          var rCost = r.repY?lenMl*380:0;
-          var tot   = gCost+rCost;
-          grandGrind+=gCost; grandRepl+=rCost;
-          tableRow(costCols,[
-            r.seg.label, grade,
-            (r.seg.lengthKm||0).toFixed(1),
-            r.repY?"Yr "+r.repY:"> "+horizon+"yr",
-            passes,
-            fmt(gCost), rCost>0?fmt(rCost):"-", fmt(tot),
-          ],i%2===0);
-        });
-        tableDivider();
-        checkY(7);
-        doc.setFontSize(8); doc.setFont("helvetica","bold");
-        doc.setTextColor.apply(doc,TEAL);
-        doc.text("TOTAL LIFECYCLE COST: "+fmt(grandGrind+grandRepl)+"  (Grinding: "+fmt(grandGrind)+" | Replacement: "+fmt(grandRepl)+")", ml+1, y+5);
-        doc.setFont("helvetica","normal"); y+=10;
-      }
-
-      // ==============================
-      // COMPARISON PAGE (if available)
-      // ==============================
-      // Note: comparison result is inside ComparePanel state - not accessible here
-      // We include a placeholder with instructions
-      newPage();
-      sectionTitle("4. Strategy Comparison Summary");
-      bodyText("Run the Strategy Comparison in the simulator to compare Preventive vs Corrective strategies for this project. Key metrics to compare:");
-      y+=2;
-      var cmpItems = [
-        ["Rail life extension","Preventive strategy typically extends rail life by 50-100% vs corrective"],
-        ["Grinding cost","Preventive requires more passes but at lower removal depth per pass"],
-        ["Replacement cost","Preventive reduces replacement frequency, often offsetting higher grinding cost"],
-        ["Total lifecycle","For most heavy-use segments, preventive is cost-optimal above ~15 MGT/yr"],
-        ["Metal reserve","Corrective strategy consumes 0.55mm/pass vs 0.20mm/pass for preventive"],
-      ];
-      var cmpCols = [{label:"Factor",w:40},{label:"Description",w:cw-40}];
-      tableHeader(cmpCols);
-      cmpItems.forEach(function(row,i){ tableRow(cmpCols,row,i%2===0); });
-      tableDivider(); y+=6;
-      bodyText("Quantitative comparison is available in the Strategy Comparison tab of the simulator. Re-run and record the delta cost from the Lifecycle Cost table for this project.");
-
-      // ==============================
-      // DISCLAIMER + SOURCES PAGE
-      // ==============================
-      newPage();
-      sectionTitle("5. Disclaimer and Sources");
-
-      subTitle("Disclaimer");
-      bodyText("This report is generated by Rail Wear Simulator v1.1. Results are based on mathematical models calibrated on published field data. They are intended for planning and budgeting purposes only and should be validated against local field measurements and contractor quotes before final budget submission.");
-      bodyText("Cost estimates use indicative reference rates for the selected region and may not reflect actual contract prices, site conditions, or local regulations. The simulator does not model: inner/outer rail asymmetry, wheel profile evolution, seasonal effects, station braking zones, or switch/crossing wear.");
-      y+=4;
-
-      subTitle("Standards and Normative References");
-      var srcs = [
-        "EN 13674-1:2011 - Railway applications. Track. Rail. Vignole railway rails 46 kg/m and above",
-        "UIC 714R - Classification of lines for the purpose of track maintenance (2004)",
-        "EN 13231-3:2012 - Railway applications. Track. Acceptance of works. Rail grinding",
-        "prEN 17343 - Railway applications. Track. Rail grinding specification (CEN)",
-        "AREMA Manual for Railway Engineering, Chapter 4 - Rail (2022)",
-        "ASTM E2660 - Standard guide for wear measurement in railway track",
-      ];
-      srcs.forEach(function(s){ bodyText("- "+s, 3); });
-      y+=4;
-
-      subTitle("Scientific References");
-      var papers = [
-        "Infrabel/TU Delft (2023): Statistical analysis of rail wear on Belgian network, Wear 522. DOI: 10.1016/j.wear.2022.204764",
-        "Liu B. et al. (2021): Field investigation of rail wear on Guangzhou Metro, Wear 477. DOI: 10.1016/j.wear.2021.203830",
-        "Archard J.F. (1953): Contact and Rubbing of Flat Surfaces, J.Applied Physics 24(8). DOI: 10.1063/1.1721448",
-        "Ringsberg J.W. (2001): Life prediction of rolling contact fatigue crack initiation, Int.J.Fatigue 23(7). DOI: 10.1016/S0142-1123(01)00011-5",
-        "Grassie S.L. (2005): Rail corrugation: advances in measurement, understanding and treatment, Wear 258. DOI: 10.1016/j.wear.2004.03.066",
-        "Rame I. et al. (2018): Abrasive wear of grinding wheels in rail grinding, Wear 406-407. DOI: 10.1016/j.wear.2018.01.012",
-      ];
-      papers.forEach(function(p){ bodyText("- "+p, 3); });
-      y+=6;
-
-      // Page numbers
-      var totalPages = doc.getNumberOfPages();
-      for(var pg=2; pg<=totalPages; pg++) {
-        doc.setPage(pg);
-        doc.setFontSize(7); doc.setTextColor.apply(doc, MUTED);
-        doc.text("Page "+pg+"/"+totalPages, W-mr, H-8, {align:"right"});
-        doc.text(today, ml, H-8);
-      }
-
-      // Save
-      var fname = (pName.replace(/[^a-zA-Z0-9_-]/g,"_")||"rail_report")+"_"+today.replace(/\//g,"-")+".pdf";
-      doc.save(fname);
-      setShowRpt(false);
-    };
-    document.head.appendChild(script);
-  }
-
   return (
     <div style={{fontFamily:"Segoe UI,sans-serif",background:"linear-gradient(135deg,#0a1a22,#0d2030,#091820)",minHeight:"100vh",color:cl.text}}>
       <div style={{borderBottom:"1px solid rgba(125,211,200,0.12)",padding:"16px 24px",display:"flex",alignItems:"center",justifyContent:"space-between",background:"rgba(0,0,0,0.2)",position:"sticky",top:0,zIndex:100}}>
@@ -2176,37 +1299,10 @@ export default function App() {
         <div style={{display:"flex",gap:10,alignItems:"center"}}>
           <span style={{fontSize:12,color:cl.dim}}>Gross MGT: <b style={{color:cl.teal}}>{mgtPrev}</b>/yr | Equiv. MGT: <b style={{color:cl.teal}}>{eqPrev}</b>/yr</span>
           <Btn onClick={function(){setHelp(true);}} sm={true}>Help and Methods</Btn>
-          <Btn onClick={function(){setShowRpt(true);}} sm={true}>Export Report (PDF)</Btn>
           <Btn onClick={run} active={true}>Run Simulation</Btn>
         </div>
       </div>
       {showHelp&&<HelpModal onClose={function(){setHelp(false);}}/>}
-
-      {showReport&&(
-        <div style={{position:"fixed",inset:0,zIndex:1000,background:"rgba(0,0,0,0.8)",backdropFilter:"blur(6px)",display:"flex",alignItems:"center",justifyContent:"center",padding:40}}>
-          <div style={{background:"linear-gradient(160deg,#0d1f2a,#0a1820)",border:"1px solid rgba(125,211,200,0.2)",borderRadius:14,width:"100%",maxWidth:480,padding:28,boxShadow:"0 32px 80px rgba(0,0,0,0.6)"}}>
-            <div style={{fontSize:10,letterSpacing:3,color:cl.teal,fontWeight:700,textTransform:"uppercase",marginBottom:6}}>Export</div>
-            <div style={{fontSize:18,fontWeight:800,color:"#e8f4f3",marginBottom:20}}>Generate PDF Report</div>
-            <div style={{marginBottom:16}}>
-              <Lbl>Project name</Lbl>
-              <input value={projectName} onChange={function(e){setProjName(e.target.value);}} placeholder="e.g. Casablanca Tram Line 3 - Phase 2" style={Object.assign({},iS,{fontSize:14})}/>
-            </div>
-            <div style={{background:"rgba(125,211,200,0.05)",border:"1px solid rgba(125,211,200,0.12)",borderRadius:8,padding:"10px 14px",marginBottom:20,fontSize:12,color:cl.dim,lineHeight:1.7}}>
-              The report will include:
-              <div style={{marginTop:6,display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
-                {["Cover page + summary","Project parameters","Results per segment","Wear and RCF charts","Lifecycle cost summary","Strategy comparison notes","Disclaimer and sources"].map(function(item){
-                  return <div key={item} style={{fontSize:11,color:cl.teal}}>&#10003; {item}</div>;
-                })}
-              </div>
-            </div>
-            {!result&&<div style={{fontSize:12,color:cl.warn,marginBottom:12,padding:"6px 10px",background:"rgba(248,113,113,0.08)",borderRadius:6}}>Run the simulation first to include results in the report.</div>}
-            <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
-              <Btn onClick={function(){setShowRpt(false);}} sm={true}>Cancel</Btn>
-              <Btn onClick={generatePDF} active={true}>Generate PDF</Btn>
-            </div>
-          </div>
-        </div>
-      )}
 
       <div style={{display:"grid",gridTemplateColumns:"360px 1fr",maxWidth:1400,margin:"0 auto",padding:"18px 18px 0"}}>
         <div style={{paddingRight:16}}>
@@ -2361,7 +1457,7 @@ export default function App() {
                     <Kpi label="Grindings"   value={asr.gCount} unit="passes"/>
                   </div>
                   <div style={{display:"flex",gap:6,marginBottom:12}}>
-                    {[["wear","Wear V and L"],["rcf","RCF Index"],["reserve","Metal Reserve"],["plan","Schedule"],["cost","Replacement Cost"],["grind","Grinding Cost"],["cmp","Strategy Comparison"]].map(function(item){return <Btn key={item[0]} onClick={function(){setCt(item[0]);}} active={ctab===item[0]} sm={true}>{item[1]}</Btn>;})}
+                    {[["wear","Wear V and L"],["rcf","RCF Index"],["reserve","Metal Reserve"],["plan","Schedule"],["cost","Replacement Cost"],["grind","Grinding Cost"]].map(function(item){return <Btn key={item[0]} onClick={function(){setCt(item[0]);}} active={ctab===item[0]} sm={true}>{item[1]}</Btn>;})}
                   </div>
                   <div style={{background:"rgba(0,0,0,0.2)",borderRadius:12,padding:18,border:"1px solid rgba(125,211,200,0.1)",marginBottom:14}}>
                     {ctab==="wear"&&(
@@ -2435,7 +1531,6 @@ export default function App() {
                     )}
                     {ctab==="cost"&&<CostPanel simResult={result} horizon={horizon}/>}
                     {ctab==="grind"&&<GrindPanel simResult={result} horizon={horizon} context={context}/>}
-                    {ctab==="cmp"&&<ComparePanel simResult={result} horizon={horizon} context={context} params={{context:context,trains:trains,segments:segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){var b=Object.assign({},s,{radius:s.repr,railGrade:s.grade});if(isBF&&initCond[s.id]){var ic=initCond[s.id];b.initWearV=ic.wearV||0;b.initWearL=ic.wearL||0;b.initRCF=ic.rcf||0;b.initMGT=ic.mgt||0;}return b;}),strategy:strategy,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon}}/>}
                   </div>
                   <div style={{background:"rgba(0,0,0,0.15)",borderRadius:10,border:"1px solid rgba(125,211,200,0.08)",overflow:"hidden"}}>
                     <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)",fontSize:11,letterSpacing:2,color:cl.teal,textTransform:"uppercase",fontWeight:700}}>Summary - All Segments</div>
