@@ -31,13 +31,6 @@ var BANDS = [
   {id:"r4",label:"400 to 800 m",    rMin:400, rMax:800,   f_v:1.5,f_l:2.5, grind:{tram:3.5,metro:12,heavy:50 }},
   {id:"r5",label:"R >= 800 m",      rMin:800, rMax:99999, f_v:1.0,f_l:1.0, grind:{tram:5.0,metro:20,heavy:80 }},
 ];
-var SPECIAL_ZONE_TYPES = {
-  braking:   { label:"Braking zone (station entry)",        fVExtra:2.2, fVRange:[1.5,3.5], corrMGT:8,  icon:"B" },
-  accel:     { label:"Acceleration zone (station exit)",    fVExtra:1.7, fVRange:[1.2,2.5], corrMGT:12, icon:"A" },
-  terminus:  { label:"Terminus / reversing zone (mixed)",   fVExtra:3.0, fVRange:[2.0,4.0], corrMGT:6,  icon:"T" },
-  transition:{ label:"Transition zone (curve to tangent)",  fVExtra:1.4, fVRange:[1.1,2.0], corrMGT:20, icon:"X" },
-};
-
 var SPEED_BANDS = [
   {max:40,  f_v:0.90,f_l:1.10},{max:80, f_v:1.00,f_l:1.00},
   {max:120, f_v:1.10,f_l:0.95},{max:160,f_v:1.20,f_l:0.90},
@@ -122,17 +115,7 @@ function runSim(params) {
     var wrV=ctx.baseWearV*rb.f_v*he*rt.f_v*tm.f_v*sf.f_v;
     var wrL=ctx.baseWearL*1.5*rb.f_l*he*rt.f_l*tm.f_l*sf.f_l*lubF;
     var rcfBase=ctx.rcfRate[ri]*grade.f_rcf*sf.f_v;
-
-    // Special zone: apply extra wear factor on vertical only
-    var fVExtra = seg.fVExtra || 1.0;
-    wrV = wrV * fVExtra;
-
-    var gi=rb.grind[params.context]||999;
-    // Corrugation: override grinding interval if configured
-    var corrMGT = seg.corrugationMGT || null;
-    var gMGT = corrMGT
-      ? corrMGT
-      : (params.strategy==="preventive" ? gi : gi*3);
+    var gi=rb.grind[params.context]||999, gMGT=params.strategy==="preventive"?gi:gi*3;
     var resI=params.railType==="groove"?12:(RESERVE[seg.railGrade]||15);
     var gp=params.strategy==="preventive"?{rem:0.20,rcfR:0.30,pwf:0.75,pmgt:gi*0.85}:{rem:0.55,rcfR:0.18,pwf:0.92,pmgt:gi*0.40};
     var wV=seg.initWearV||0, wL=seg.initWearL||0, rcf=Math.min(seg.initRCF||0,0.99);
@@ -1687,7 +1670,6 @@ export default function App() {
   const [horizon,  setHz]   = useState(30);
   const [isBF,     setBF]   = useState(false);
   const [initCond, setIC]   = useState({r1:{wearV:0,wearL:0,rcf:0,mgt:0},r2:{wearV:0,wearL:0,rcf:0,mgt:0},r3:{wearV:0,wearL:0,rcf:0,mgt:0},r4:{wearV:0,wearL:0,rcf:0,mgt:0},r5:{wearV:0,wearL:0,rcf:0,mgt:0}});
-  const [specialZones, setSpZ] = useState([]);
   const [result,   setRes]  = useState(null);
   const [aidx,     setAi]   = useState(0);
   const [ctab,     setCt]   = useState("wear");
@@ -1713,21 +1695,10 @@ export default function App() {
       if(isBF&&initCond[s.id]){var ic=initCond[s.id];base.initWearV=ic.wearV||0;base.initWearL=ic.wearL||0;base.initRCF=ic.rcf||0;base.initMGT=ic.mgt||0;}
       return base;
     });
-    // Append special zones as additional segments
-    var activeZones = specialZones.filter(function(z){return z.lengthM>0;}).map(function(z){
-      return {
-        id:z.id, label:z.name, radius:z.radius||9000, railGrade:z.grade||"R260",
-        lengthKm: z.lengthM/1000,
-        fVExtra: z.fVExtra,
-        corrugationMGT: z.corrugation ? z.corrMGT : null,
-        isSpecialZone: true, zoneType: z.type,
-      };
-    });
-    var allSegs = active.concat(activeZones);
-    if(allSegs.length===0){setErr("Enable at least one radius band or special zone.");return;}
-    try{setErr(null);var r=runSim({context:context,trains:trains,segments:allSegs,strategy:strategy,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon});setRes(r);setAi(0);setHR(true);}
+    if(active.length===0){setErr("Enable at least one radius band with length > 0.");return;}
+    try{setErr(null);var r=runSim({context:context,trains:trains,segments:active,strategy:strategy,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon});setRes(r);setAi(0);setHR(true);}
     catch(e){setErr("Simulation error: "+e.message);}
-  },[context,trains,segs,strategy,railType,trackMode,speed,lubr,horizon,isBF,initCond,specialZones]);
+  },[context,trains,segs,strategy,railType,trackMode,speed,lubr,horizon,isBF,initCond]);
 
   var asr=result&&result.results[aidx];
   var gp={railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,strategy:strategy};
@@ -2350,70 +2321,6 @@ export default function App() {
                 {segs.filter(function(s){return s.active&&s.lengthKm>0;}).length===0&&<div style={{fontSize:12,color:"#4a6a74",textAlign:"center",padding:"12px 0"}}>Enable radius bands above to enter initial conditions</div>}
               </div>
             )}
-          </Card>
-
-          <Card title="Special Zones (Stations, Corrugation)">
-            <div style={{fontSize:11,color:cl.dim,marginBottom:10,lineHeight:1.6}}>Add station braking/acceleration zones, terminus areas, or transition zones. Each is simulated as an independent segment with an enhanced vertical wear factor.</div>
-            {specialZones.map(function(z){
-              var zt = SPECIAL_ZONE_TYPES[z.type] || SPECIAL_ZONE_TYPES.braking;
-              return (
-                <div key={z.id} style={{background:"rgba(255,255,255,0.03)",borderRadius:8,padding:"12px",marginBottom:10,border:"1px solid rgba(255,255,255,0.08)"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{fontSize:11,fontWeight:700,color:cl.amber,background:"rgba(251,191,36,0.15)",borderRadius:4,padding:"2px 7px"}}>{zt.icon}</span>
-                      <input value={z.name} onChange={function(e){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{name:e.target.value}):x;});});}} style={Object.assign({},iS,{width:160,fontSize:12})}/>
-                    </div>
-                    <button onClick={function(){setSpZ(function(a){return a.filter(function(x){return x.id!==z.id;});});}} style={{background:"none",border:"none",color:cl.warn,cursor:"pointer",fontSize:16}}>x</button>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-                    <div>
-                      <Lbl>Zone type</Lbl>
-                      <Sel value={z.type} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{type:v,fVExtra:SPECIAL_ZONE_TYPES[v].fVExtra,corrMGT:SPECIAL_ZONE_TYPES[v].corrMGT}):x;});});}} opts={Object.keys(SPECIAL_ZONE_TYPES).map(function(k){return {v:k,l:SPECIAL_ZONE_TYPES[k].label};})}/>
-                    </div>
-                    <div>
-                      <Lbl>Rail grade</Lbl>
-                      <Sel value={z.grade} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{grade:v}):x;});});}} opts={Object.keys(RAIL_GRADES).map(function(k){return {v:k,l:k};})}/>
-                    </div>
-                    <div>
-                      <Lbl>Zone length (m)</Lbl>
-                      <Inp value={z.lengthM} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{lengthM:v}):x;});});}} min={10} max={500} step={10}/>
-                    </div>
-                    <div>
-                      <Lbl>Radius (m, or 9000=tangent)</Lbl>
-                      <Inp value={z.radius} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{radius:v}):x;});});}} min={50} max={9000}/>
-                    </div>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                    <div>
-                      <Lbl>{"Wear factor f_V (preset: x"+zt.fVExtra.toFixed(1)+" for "+z.type+")"}</Lbl>
-                      <Inp value={z.fVExtra} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{fVExtra:Math.max(zt.fVRange[0],Math.min(zt.fVRange[1],v))}):x;});});}} min={zt.fVRange[0]} max={zt.fVRange[1]} step={0.1}/>
-                      <div style={{fontSize:10,color:cl.dim,marginTop:3}}>Range for this zone type: x{zt.fVRange[0]} to x{zt.fVRange[1]}</div>
-                    </div>
-                    <div>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                        <div onClick={function(){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{corrugation:!x.corrugation}):x;});});}} style={{width:26,height:15,borderRadius:8,background:z.corrugation?cl.amber:"rgba(255,255,255,0.1)",position:"relative",cursor:"pointer",border:"1px solid "+(z.corrugation?cl.amber:"rgba(255,255,255,0.2)")}}>
-                          <div style={{width:9,height:9,borderRadius:"50%",background:"#fff",position:"absolute",top:2,left:z.corrugation?13:2}}/>
-                        </div>
-                        <span style={{fontSize:11,color:z.corrugation?cl.amber:cl.dim}}>Corrugation risk</span>
-                      </div>
-                      {z.corrugation && (
-                        <div>
-                          <Lbl>Grinding interval (MGT)</Lbl>
-                          <Inp value={z.corrMGT} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{corrMGT:Math.max(1,v)}):x;});});}} min={1} max={50} step={0.5}/>
-                          <div style={{fontSize:10,color:cl.amber,marginTop:3}}>Overrides strategy interval. Preset: {zt.corrMGT} MGT</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            <Btn onClick={function(){
-              var newId = "sz_"+Date.now();
-              var defType = "braking";
-              setSpZ(function(a){return a.concat([{id:newId,name:"Station zone "+(a.length+1),type:defType,lengthM:100,radius:9000,grade:"R260",fVExtra:SPECIAL_ZONE_TYPES[defType].fVExtra,corrugation:false,corrMGT:SPECIAL_ZONE_TYPES[defType].corrMGT}]);});
-            }} sm={true}>+ Add special zone</Btn>
-            {specialZones.length>0&&<div style={{fontSize:10,color:"#4a6a74",marginTop:8}}>Special zones appear as additional segments in the simulation results, clearly labelled with their zone type badge.</div>}
           </Card>
 
           <Card title="Maintenance Strategy">
