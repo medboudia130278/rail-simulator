@@ -2154,7 +2154,6 @@ export default function App() {
   const [sharedCurrency,setSharedCur] = useState("EUR");
   const [liveRates,    setLiveRates]  = useState(null);
   const [customRates,  setCustomRates]= useState({});
-  const [customCodes,  setCustomCodes] = useState([]); // user-added currency codes
   const [ratesStatus,  setRatesStatus]= useState("idle");
   const [ratesDate,    setRatesDate]  = useState(null);
   const [showRatesPop, setShowRatesPop]= useState(false);
@@ -2915,10 +2914,10 @@ export default function App() {
                 var customRate = customRates[code] !== undefined ? customRates[code] : null;
                 var effectiveRate = customRate !== null ? customRate : (liveRate||cur.rate);
                 var isCustom = customRate !== null;
-                var isUserAdded = customCodes.indexOf(code) >= 0;
+                var isLive   = !isCustom && liveRate !== null;
                 return (
-                  <div key={code} style={{display:"grid",gridTemplateColumns:"120px 1fr 70px 90px",gap:8,alignItems:"center",padding:"6px 8px",borderRadius:6,background:isUserAdded?"rgba(125,211,200,0.04)":"rgba(255,255,255,0.02)"}}>
-                    <div style={{fontSize:12,color:"#e8f4f3",fontWeight:500}}>{cur.label.indexOf(" (")>0?cur.label.slice(0,cur.label.indexOf(" (")):cur.label}</div>
+                  <div key={code} style={{display:"grid",gridTemplateColumns:"120px 1fr 80px 60px",gap:8,alignItems:"center",padding:"6px 8px",borderRadius:6,background:"rgba(255,255,255,0.02)"}}>
+                    <div style={{fontSize:12,color:"#e8f4f3",fontWeight:500}}>{cur.label.replace(/\s*\(.*\)/,"").trim()}</div>
                     <input type="number" value={effectiveRate} min={0.001} step={0.001}
                       onChange={function(e){
                         var v=+e.target.value;
@@ -2926,68 +2925,16 @@ export default function App() {
                       }}
                       style={{background:"rgba(0,0,0,0.3)",border:"1px solid "+(isCustom?"rgba(251,191,36,0.4)":"rgba(255,255,255,0.1)"),borderRadius:4,color:"#e8f4f3",padding:"4px 8px",fontSize:12,textAlign:"right"}}/>
                     <div style={{fontSize:10,color:cl.dim,textAlign:"right"}}>
-                      {!isCustom&&liveRate&&<span style={{color:cl.teal}}>live</span>}
-                      {isCustom&&!isUserAdded&&<span style={{color:cl.amber}}>custom</span>}
-                      {isUserAdded&&liveRate&&!isCustom&&<span style={{color:cl.teal}}>added + live</span>}
-                      {isUserAdded&&(!liveRate||isCustom)&&<span style={{color:cl.amber}}>added</span>}
-                      {!liveRate&&!isCustom&&!isUserAdded&&<span style={{color:cl.dim}}>preset</span>}
+                      {liveRate&&!isCustom&&<span style={{color:cl.teal}}>live</span>}
+                      {isCustom&&<span style={{color:cl.amber}}>custom</span>}
+                      {!liveRate&&!isCustom&&<span style={{color:cl.dim}}>preset</span>}
                     </div>
-                    <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
-                      {isCustom&&!isUserAdded&&(
-                        <div onClick={function(){setCustomRates(function(prev){var n=Object.assign({},prev);delete n[code];return n;});}} style={{fontSize:9,cursor:"pointer",padding:"2px 6px",borderRadius:3,background:"rgba(248,113,113,0.15)",color:"#f87171"}}>reset</div>
-                      )}
-                      {isUserAdded&&(
-                        <div style={{display:"flex",gap:4}}>
-                          {isCustom&&<div onClick={function(){setCustomRates(function(prev){var n=Object.assign({},prev);delete n[code];return n;});}} style={{fontSize:9,cursor:"pointer",padding:"2px 6px",borderRadius:3,background:"rgba(248,113,113,0.1)",color:"#f87171"}}>reset</div>}
-                          <div onClick={function(){
-                            delete CURRENCIES[code];
-                            setCustomCodes(function(prev){return prev.filter(function(c){return c!==code;});});
-                            setCustomRates(function(prev){var n=Object.assign({},prev);delete n[code];return n;});
-                            if(sharedCurrency===code) setSharedCur("EUR");
-                          }} style={{fontSize:9,cursor:"pointer",padding:"2px 6px",borderRadius:3,background:"rgba(248,113,113,0.2)",color:"#f87171",fontWeight:700}}>delete</div>
-                        </div>
-                      )}
+                    <div style={{display:"flex",gap:4}}>
+                      {isCustom&&<div onClick={function(){setCustomRates(function(prev){var n=Object.assign({},prev);delete n[code];return n;});}} style={{fontSize:9,cursor:"pointer",padding:"2px 6px",borderRadius:3,background:"rgba(248,113,113,0.15)",color:"#f87171"}}>reset</div>}
                     </div>
                   </div>
                 );
               })}
-            </div>
-            <div style={{marginTop:14,paddingTop:12,borderTop:"1px solid rgba(255,255,255,0.08)"}}>
-              <div style={{fontSize:11,color:cl.teal,fontWeight:700,marginBottom:8,letterSpacing:1,textTransform:"uppercase"}}>Add custom currency</div>
-              <div style={{display:"grid",gridTemplateColumns:"80px 80px 1fr 80px",gap:8,alignItems:"center",marginBottom:6}}>
-                <input
-                  id="cust-code" type="text" maxLength={6} placeholder="Code e.g. XOF"
-                  style={{background:"rgba(0,0,0,0.3)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:4,color:"#e8f4f3",padding:"4px 8px",fontSize:12,textTransform:"uppercase"}}
-                />
-                <input
-                  id="cust-sym" type="text" maxLength={8} placeholder="Symbol"
-                  style={{background:"rgba(0,0,0,0.3)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:4,color:"#e8f4f3",padding:"4px 8px",fontSize:12}}
-                />
-                <input
-                  id="cust-rate" type="number" min={0.0001} step={0.001} placeholder="Rate/EUR (optional if API knows it)"
-                  style={{background:"rgba(0,0,0,0.3)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:4,color:"#e8f4f3",padding:"4px 8px",fontSize:12,width:"100%"}}
-                />
-                <div onClick={function(){
-                  var code = document.getElementById("cust-code").value.trim().toUpperCase();
-                  var sym  = document.getElementById("cust-sym").value.trim() || code;
-                  var rate = parseFloat(document.getElementById("cust-rate").value);
-                  var liveR = liveRates && liveRates[code] ? liveRates[code] : null;
-                  var finalRate = !isNaN(rate) && rate>0 ? rate : (liveR||null);
-                  if(code.length>=2 && finalRate) {
-                    CURRENCIES[code] = {label:code+" (custom)", symbol:sym||code, rate:finalRate};
-                    // Only store in customRates if no live rate available — otherwise let API drive it
-                    if(!liveR) {
-                      setCustomRates(function(prev){return Object.assign({},prev,{[code]:finalRate});});
-                    }
-                    setCustomCodes(function(prev){return prev.indexOf(code)>=0?prev:prev.concat([code]);});
-                    setSharedCur(code);
-                    document.getElementById("cust-code").value="";
-                    document.getElementById("cust-sym").value="";
-                    document.getElementById("cust-rate").value="";
-                  }
-                }} style={{cursor:"pointer",padding:"5px 10px",borderRadius:5,background:"rgba(125,211,200,0.15)",border:"1px solid rgba(125,211,200,0.3)",color:cl.teal,fontSize:11,fontWeight:700,textAlign:"center"}}>Add</div>
-              </div>
-              <div style={{fontSize:10,color:"#4a6a74"}}>Code ISO (2-6 chars) + symbol. Rate is optional if the API knows the currency (e.g. BRL, TRY, NGN) — live rate will be used automatically.</div>
             </div>
             <div style={{marginTop:12,fontSize:10,color:"#4a6a74",lineHeight:1.6}}>
               Edit any rate to override. Click Reset to restore live or preset value. Source: exchangerate-api.com

@@ -2928,9 +2928,8 @@ export default function App() {
                     <div style={{fontSize:10,color:cl.dim,textAlign:"right"}}>
                       {!isCustom&&liveRate&&<span style={{color:cl.teal}}>live</span>}
                       {isCustom&&!isUserAdded&&<span style={{color:cl.amber}}>custom</span>}
-                      {isUserAdded&&liveRate&&!isCustom&&<span style={{color:cl.teal}}>added + live</span>}
-                      {isUserAdded&&(!liveRate||isCustom)&&<span style={{color:cl.amber}}>added</span>}
-                      {!liveRate&&!isCustom&&!isUserAdded&&<span style={{color:cl.dim}}>preset</span>}
+                      {isUserAdded&&<span style={{color:cl.teal}}>added</span>}
+                      {!liveRate&&!isCustom&&<span style={{color:cl.dim}}>preset</span>}
                     </div>
                     <div style={{display:"flex",gap:4,justifyContent:"flex-end"}}>
                       {isCustom&&!isUserAdded&&(
@@ -2964,21 +2963,16 @@ export default function App() {
                   style={{background:"rgba(0,0,0,0.3)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:4,color:"#e8f4f3",padding:"4px 8px",fontSize:12}}
                 />
                 <input
-                  id="cust-rate" type="number" min={0.0001} step={0.001} placeholder="Rate/EUR (optional if API knows it)"
+                  id="cust-rate" type="number" min={0.0001} step={0.001} placeholder="Rate vs EUR (e.g. 655.96)"
                   style={{background:"rgba(0,0,0,0.3)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:4,color:"#e8f4f3",padding:"4px 8px",fontSize:12,width:"100%"}}
                 />
                 <div onClick={function(){
                   var code = document.getElementById("cust-code").value.trim().toUpperCase();
                   var sym  = document.getElementById("cust-sym").value.trim() || code;
                   var rate = parseFloat(document.getElementById("cust-rate").value);
-                  var liveR = liveRates && liveRates[code] ? liveRates[code] : null;
-                  var finalRate = !isNaN(rate) && rate>0 ? rate : (liveR||null);
-                  if(code.length>=2 && finalRate) {
-                    CURRENCIES[code] = {label:code+" (custom)", symbol:sym||code, rate:finalRate};
-                    // Only store in customRates if no live rate available — otherwise let API drive it
-                    if(!liveR) {
-                      setCustomRates(function(prev){return Object.assign({},prev,{[code]:finalRate});});
-                    }
+                  if(code.length>=2 && !isNaN(rate) && rate>0) {
+                    CURRENCIES[code] = {label:code+" (custom)", symbol:sym, rate:rate};
+                    setCustomRates(function(prev){return Object.assign({},prev,{[code]:rate});});
                     setCustomCodes(function(prev){return prev.indexOf(code)>=0?prev:prev.concat([code]);});
                     setSharedCur(code);
                     document.getElementById("cust-code").value="";
@@ -2987,7 +2981,7 @@ export default function App() {
                   }
                 }} style={{cursor:"pointer",padding:"5px 10px",borderRadius:5,background:"rgba(125,211,200,0.15)",border:"1px solid rgba(125,211,200,0.3)",color:cl.teal,fontSize:11,fontWeight:700,textAlign:"center"}}>Add</div>
               </div>
-              <div style={{fontSize:10,color:"#4a6a74"}}>Code ISO (2-6 chars) + symbol. Rate is optional if the API knows the currency (e.g. BRL, TRY, NGN) — live rate will be used automatically.</div>
+              <div style={{fontSize:10,color:"#4a6a74"}}>Enter ISO code (2-6 chars), display symbol, and rate per 1 EUR. Currency will be added to the selector and set as active.</div>
             </div>
             <div style={{marginTop:12,fontSize:10,color:"#4a6a74",lineHeight:1.6}}>
               Edit any rate to override. Click Reset to restore live or preset value. Source: exchangerate-api.com
