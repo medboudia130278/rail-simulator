@@ -1457,19 +1457,6 @@ var HELP=[
      {label:"Arias-Cuevas et al. (2010) - Friction modifiers in dry/wet conditions, Wear 268",url:"https://doi.org/10.1016/j.wear.2009.09.006",type:"paper"},
      {label:"Shanghai Metro Line 2 lateral wear study (2021), J.Rail and Rapid Transit",url:"https://doi.org/10.1177/0954409720915584",type:"paper"},
      {label:"Banverket (2018) - Field trials on lateral wear with friction modifiers (Sweden)",url:"https://www.trafikverket.se/",type:"report"},
-   ],
-   details:[
-     {heading:"How lubrication works physically",
-      text:"Flange lubrication introduces a friction modifier between the wheel flange and the rail gauge face. This reduces friction CoF from ~0.50 dry down to 0.10-0.25.\n\nLubrication ONLY affects LATERAL wear. The crown/table contact stays dry because:\n- Lubricant is applied at gauge face level, not on the running table\n- The running surface must maintain CoF > 0.30 for braking and traction\n- Migrating lubricant is quickly removed by wheel rolling action\n\nThis is why the simulator applies f_lubr only to wearRate_L with no effect on wearRate_V or RCF."},
-     {heading:"Lubrication factors and their physical basis",
-      text:"f_lubr is a cycle-averaged multiplier on lateral wear rate. Immediately after application, reduction can reach 80-90%, but degrades between applications as lubricant is consumed. The simulator uses averaged values calibrated from Arias-Cuevas (2010) and Shanghai Metro (2021) field data."},
-     {table:[["Mode","f_lubr","Lateral wear reduction","Typical system"],
-             ["None","1.00","0%","No lubrication"],
-             ["Light","0.50","-50%","Periodic trackside greasers"],
-             ["Moderate","0.35","-65%","Wayside + on-board combined"],
-             ["Heavy","0.25","-75%","Continuous on-board system"]]},
-     {heading:"When lubrication is and is not beneficial",
-      text:"Lubrication is highly effective in curves below R400m where lateral wear dominates. In tight curves (R<200m), reducing lateral wear by 50-75% can extend rail life by 30-60% and reduce grinding frequency.\n\nIn tangent track and large-radius curves (R>800m), lateral wear is minimal and lubrication provides little benefit. Excessive lubrication in tangent zones can reduce braking CoF below safety thresholds.\n\nPractical rule: apply lubrication selectively in curves R<400m."},
    ]
   },
   {id:"brownfield",title:"Brownfield Mode",
@@ -1478,14 +1465,6 @@ var HELP=[
      {label:"EN 13231-1:2016 - Acceptance of railway track geometry after maintenance",url:"https://standards.cen.eu/dyn/www/f?p=204:110:0::::FSP_PROJECT:38793",type:"standard"},
      {label:"EN 13674-1:2011 - Rail wear measurement convention (clause 5.4)",url:"https://www.en-standard.eu/bs-en-13674-1-2011-railway-applications-track-rail/",type:"standard"},
      {label:"Network Rail NR/SP/TRK/001 - Track inspection handbook (2021)",url:"https://www.networkrail.co.uk/industry-and-commercial/",type:"standard"},
-   ],
-   details:[
-     {heading:"What brownfield mode changes in the simulation",
-      text:"Greenfield (default): simulation starts from a new rail with zero wear, zero RCF, zero MGT. Every segment begins in perfect condition.\n\nBrownfield: you provide the current condition of each segment - existing vertical wear, lateral wear, RCF index, and accumulated MGT. The simulation continues from that point, calculating remaining life to the first replacement threshold.\n\nA segment already at 6mm vertical wear (9mm metro limit) will reach replacement in 1-3 years instead of 15-20 years for a new rail. This is critical for realistic lifecycle planning on inherited infrastructure."},
-     {heading:"How to estimate initial RCF index from visual inspection",
-      text:"RCF index is the hardest parameter to measure directly. Use these visual inspection guidelines:\n\n0.00 to 0.20: No visible surface damage - smooth, shiny rail surface\n0.20 to 0.45: Light surface cracks visible under raking light - early head checks\n0.45 to 0.65: Moderate head checks or squats clearly visible - corrective action needed\n0.65 to 0.85: Severe cracking, spalling beginning - urgent intervention required\n\nFor precise values, ultrasonic testing (UT) or eddy current inspection provide quantitative crack depth measurements that can be converted to an approximate RCF index."},
-     {heading:"The health score calculation",
-      text:"health = max(wearV / limitV, wearL / limitL, rcf)\n\nThis single 0-to-1 indicator shows how close the segment is to any replacement threshold. The color coding is:\n\nGreen (health < 0.40): GOOD - substantial remaining life\nAmber (0.40 to 0.70): MODERATE - degradation visible, plan intervention in 3-8 years\nRed (> 0.70): POOR - approaching replacement, priority intervention\n\nThe health score uses whichever criterion (vertical wear, lateral wear, or RCF) is closest to its limit - reflecting the real maintenance logic where any single threshold triggers replacement."},
    ]
   },
   {id:"replacement",title:"Replacement Criteria",
@@ -1495,16 +1474,6 @@ var HELP=[
      {label:"UIC 714R - Rail defect action levels (2004)",url:"https://uic.org/IMG/pdf/714r.pdf",type:"standard"},
      {label:"Network Rail NR/L2/TRK/001 - Track inspection and maintenance (2022)",url:"https://www.networkrail.co.uk/industry-and-commercial/",type:"standard"},
      {label:"Infrabel TR 00059 - Rail inspection and renewal criteria (2021)",url:"https://www.infrabel.be/en/about-infrabel/technical-references",type:"standard"},
-   ],
-   details:[
-     {heading:"The three replacement triggers in detail",
-      text:"The simulator checks all three conditions at every step and triggers replacement the moment ANY ONE is exceeded.\n\n1. VERTICAL WEAR >= limit\nRail head height reduced beyond safe limit. The wheel drops too far into the rail, increasing flanging load dangerously. Set by EN 13674-1 Table 2.\n\n2. LATERAL WEAR >= limit\nGauge face worn beyond safe limit. Creates derailment risk in curves where rail is already tilted under lateral load. Lateral limit is typically higher than vertical because the rail tolerates more gauge face loss before safety is compromised.\n\n3. RCF Index >= 0.70\nExtensive sub-surface cracking makes the rail structurally unsafe even if dimensional wear limits are not yet reached. A rail replaced for RCF often still has significant wear reserve - the failure mode is fatigue, not abrasion."},
-     {table:[["Context","Vertical limit","Lateral limit","Typical section"],
-             ["Tram","7 mm","8 mm","41-54 kg/m"],
-             ["Metro / LRT","9 mm","11 mm","54-60 kg/m"],
-             ["Heavy Rail","12 mm","14 mm","54-60 kg/m"]]},
-     {heading:"Grinding reserve vs wear reserve",
-      text:"The wear limit is the absolute dimensional maximum. But the grinding reserve (metal available for removal by grinding) may be exhausted before the wear limit is reached.\n\nR350HT example (17mm grinding reserve, corrective strategy at 2.2mm per intervention):\n17mm / 2.2mm = 7.7 -> only 7 interventions before reserve is exhausted, even if wear limit is not yet reached.\n\nWith preventive strategy (0.20mm per intervention):\n17mm / 0.20mm = 85 interventions - the rail reaches its wear limit from traffic, not from grinding overconsumption.\n\nThis is one of the strongest economic arguments for preventive over corrective grinding."},
    ]
   },
   {id:"cost_repl",title:"Replacement Cost Estimation",
@@ -1531,18 +1500,6 @@ var HELP=[
      {label:"Loram Technologies - Abrasive consumption field data (2021)",url:"https://www.loram.com/capabilities/rail-grinding/",type:"report"},
      {label:"Rame I. et al. (2018) - Abrasive wear of grinding wheels in rail grinding, Wear 406-407",url:"https://doi.org/10.1016/j.wear.2018.01.012",type:"paper"},
      {label:"Vossloh Rail Services - Grinding wheel application guide (2020)",url:"https://www.vossloh.com/en/products-and-solutions/rail-services/",type:"report"},
-   ],
-   details:[
-     {heading:"What grinding stones are and why they wear",
-      text:"Grinding stones (abrasive segments) are consumable blocks of bonded abrasive mounted on each grinding head. Typical weight: 0.9 kg (small machine) to 2.2 kg (Speno/Loram). As the stone rotates against the rail at high speed, both rail and stone lose material simultaneously.\n\nStone wear depends on three factors:\n\n1. Curve radius: tight curves force intense lateral contact. A stone in R<100m wears 5-8x faster than in tangent track.\n\n2. Rail grade hardness: harder rail (R400HT) is more abrasive to the stone. R400HT consumes ~45% more stones than R260 for the same length ground.\n\n3. Machine size: larger machines spread work across more heads per pass, but each stone still wears at the same rate per unit of rail."},
-     {heading:"Rate formula explained",
-      text:"Rate (stones/km/pass) = baseRate[machine][band] x gradeFactor[grade] x 2 rails\n\nThe x2 multiplier accounts for both rails being ground simultaneously. The rate in the table column is already x2 (both rails). The Preset rates line below the table shows per rail only - both are correct for their respective context.\n\nGradeFactor by grade: R200=0.90 / R260=1.00 (ref) / R320Cr=1.15 / R350HT=1.30 / R400HT=1.45"},
-     {table:[["Machine","R<100m","R100-200","R200-400","R400-800","Tangent","Stone weight"],
-             ["Small (tram/metro)","4.0","2.5","1.5","1.0","0.8","0.9 kg"],
-             ["Line machine","6.5","3.8","2.2","1.4","1.2","1.4 kg"],
-             ["Speno/Loram","10.0","6.0","3.5","2.2","2.0","2.2 kg"]]},
-     {heading:"First cycle vs full horizon - procurement planning",
-      text:"First cycle: stone quantity to the first rail replacement. Use this for single maintenance contracts.\n\nFull horizon: total over all replacement cycles for the contract duration. Use this for:\n- Long-term framework contracts with fixed stone supply\n- Budget planning over 10-30 year concession agreements\n- Warehouse sizing for remote locations where emergency resupply is difficult\n\nThe Implied EUR/ml indicator in Unit Rates helps cross-check your stone unit price against the grinding cost rate, alerting you when the two are inconsistent (badge turns red with over/underestimate warning)."},
    ]
   },
   {id:"validation",title:"Validation and Calibration",
@@ -3641,7 +3598,7 @@ export default function App() {
                       setGCMF(p.cMobilFix !== undefined ? p.cMobilFix : null);
                       setGCMK(p.cMobilKm  !== undefined ? p.cMobilKm  : null);
                     }}/>}
-                    {ctab==="cmp"&&<ComparePanel simResult={result} horizon={horizon} context={context} params={{context:context,trains:trains,segments:segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){var b=Object.assign({},s,{radius:s.repr,railGrade:s.grade});if(isBF&&initCond[s.id]){var ic=initCond[s.id];b.initWearV=ic.wearV||0;b.initWearL=ic.wearL||0;b.initRCF=ic.rcf||0;b.initMGT=ic.mgt||0;}return b;}).concat(specialZones.filter(function(z){return z.lengthM>0;}).map(function(z){return {id:z.id,label:z.name,radius:z.radius||9000,railGrade:z.grade||"R260",lengthKm:z.lengthM/1000,fVExtra:z.fVExtra,corrugationMGT:z.corrugation?z.corrMGT:null,isSpecialZone:true,zoneType:z.type};})),strategy:strategy,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon,customLimV:customLimActive?customLimV:null,customLimL:customLimActive?customLimL:null}} grindEurPerMl={liveGrindRate} replEurPerMl={liveReplRate} grindCostParams={liveGrindCost} calcReplRate={calcReplRateForGrade} currency={sharedCurrency}/>}
+                    {ctab==="cmp"&&<ComparePanel simResult={result} horizon={horizon} context={context} params={{context:context,trains:trains,segments:segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){var b=Object.assign({},s,{radius:s.repr,railGrade:s.grade});if(isBF&&initCond[s.id]){var ic=initCond[s.id];b.initWearV=ic.wearV||0;b.initWearL=ic.wearL||0;b.initRCF=ic.rcf||0;b.initMGT=ic.mgt||0;}return b;}),strategy:strategy,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon,customLimV:customLimActive?customLimV:null,customLimL:customLimActive?customLimL:null}} grindEurPerMl={liveGrindRate} replEurPerMl={liveReplRate} grindCostParams={liveGrindCost} calcReplRate={calcReplRateForGrade} currency={sharedCurrency}/>}
                   </div>
                   <div style={{background:"rgba(0,0,0,0.15)",borderRadius:10,border:"1px solid rgba(125,211,200,0.08)",overflow:"hidden"}}>
                     <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)",fontSize:11,letterSpacing:2,color:cl.teal,textTransform:"uppercase",fontWeight:700}}>Summary - All Segments</div>
@@ -3669,10 +3626,7 @@ export default function App() {
 
                   {/* Full horizon summary table */}
                   <div style={{background:"rgba(0,0,0,0.15)",borderRadius:10,border:"1px solid rgba(125,211,200,0.1)",marginTop:12}}>
-                    <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{fontSize:11,letterSpacing:2,color:cl.teal,textTransform:"uppercase",fontWeight:700}}>Summary - All segments (full {horizon}-year horizon)</div>
-                      <div style={{fontSize:10,color:cl.dim}}>Strategy: <b style={{color:cl.text}}>{strategy==="preventive"?"Preventive":"Corrective"}</b> -- compare with same column in Strategy Comparison</div>
-                    </div>
+                    <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)",fontSize:11,letterSpacing:2,color:cl.teal,textTransform:"uppercase",fontWeight:700}}>Summary - All segments (full {horizon}-year horizon)</div>
                     <div style={{overflowX:"auto"}}>
                       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                         <thead><tr style={{background:"rgba(0,0,0,0.2)"}}>{["Segment","Grade","Replacements","Total grindings","Grind cost","Repl. cost","Lifecycle total"].map(function(h){return <th key={h} style={{padding:"8px 12px",textAlign:"left",color:cl.teal,fontWeight:600,fontSize:10,letterSpacing:1}}>{h}</th>;})}</tr></thead>

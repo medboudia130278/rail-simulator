@@ -3641,7 +3641,7 @@ export default function App() {
                       setGCMF(p.cMobilFix !== undefined ? p.cMobilFix : null);
                       setGCMK(p.cMobilKm  !== undefined ? p.cMobilKm  : null);
                     }}/>}
-                    {ctab==="cmp"&&<ComparePanel simResult={result} horizon={horizon} context={context} params={{context:context,trains:trains,segments:segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){var b=Object.assign({},s,{radius:s.repr,railGrade:s.grade});if(isBF&&initCond[s.id]){var ic=initCond[s.id];b.initWearV=ic.wearV||0;b.initWearL=ic.wearL||0;b.initRCF=ic.rcf||0;b.initMGT=ic.mgt||0;}return b;}).concat(specialZones.filter(function(z){return z.lengthM>0;}).map(function(z){return {id:z.id,label:z.name,radius:z.radius||9000,railGrade:z.grade||"R260",lengthKm:z.lengthM/1000,fVExtra:z.fVExtra,corrugationMGT:z.corrugation?z.corrMGT:null,isSpecialZone:true,zoneType:z.type};})),strategy:strategy,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon,customLimV:customLimActive?customLimV:null,customLimL:customLimActive?customLimL:null}} grindEurPerMl={liveGrindRate} replEurPerMl={liveReplRate} grindCostParams={liveGrindCost} calcReplRate={calcReplRateForGrade} currency={sharedCurrency}/>}
+                    {ctab==="cmp"&&<ComparePanel simResult={result} horizon={horizon} context={context} params={{context:context,trains:trains,segments:segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){var b=Object.assign({},s,{radius:s.repr,railGrade:s.grade});if(isBF&&initCond[s.id]){var ic=initCond[s.id];b.initWearV=ic.wearV||0;b.initWearL=ic.wearL||0;b.initRCF=ic.rcf||0;b.initMGT=ic.mgt||0;}return b;}),strategy:strategy,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon,customLimV:customLimActive?customLimV:null,customLimL:customLimActive?customLimL:null}} grindEurPerMl={liveGrindRate} replEurPerMl={liveReplRate} grindCostParams={liveGrindCost} calcReplRate={calcReplRateForGrade} currency={sharedCurrency}/>}
                   </div>
                   <div style={{background:"rgba(0,0,0,0.15)",borderRadius:10,border:"1px solid rgba(125,211,200,0.08)",overflow:"hidden"}}>
                     <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)",fontSize:11,letterSpacing:2,color:cl.teal,textTransform:"uppercase",fontWeight:700}}>Summary - All Segments</div>
@@ -3669,10 +3669,7 @@ export default function App() {
 
                   {/* Full horizon summary table */}
                   <div style={{background:"rgba(0,0,0,0.15)",borderRadius:10,border:"1px solid rgba(125,211,200,0.1)",marginTop:12}}>
-                    <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                      <div style={{fontSize:11,letterSpacing:2,color:cl.teal,textTransform:"uppercase",fontWeight:700}}>Summary - All segments (full {horizon}-year horizon)</div>
-                      <div style={{fontSize:10,color:cl.dim}}>Strategy: <b style={{color:cl.text}}>{strategy==="preventive"?"Preventive":"Corrective"}</b> -- compare with same column in Strategy Comparison</div>
-                    </div>
+                    <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)",fontSize:11,letterSpacing:2,color:cl.teal,textTransform:"uppercase",fontWeight:700}}>Summary - All segments (full {horizon}-year horizon)</div>
                     <div style={{overflowX:"auto"}}>
                       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                         <thead><tr style={{background:"rgba(0,0,0,0.2)"}}>{["Segment","Grade","Replacements","Total grindings","Grind cost","Repl. cost","Lifecycle total"].map(function(h){return <th key={h} style={{padding:"8px 12px",textAlign:"left",color:cl.teal,fontWeight:600,fontSize:10,letterSpacing:1}}>{h}</th>;})}</tr></thead>
