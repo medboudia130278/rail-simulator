@@ -137,8 +137,6 @@ function runSim(params) {
   var sf=SPEED_BANDS.find(function(s){return params.speed<=s.max;})||SPEED_BANDS[4];
   var lubKey=params.lubrication||"none", mgtPY=calcMGT(params.trains), eqPY=calcEqMGT(params.trains,params.context);
   var limits=LIMITS[params.context];
-  if(params.customLimV!==null && params.customLimV!==undefined) limits=Object.assign({},limits,{v:params.customLimV});
-  if(params.customLimL!==null && params.customLimL!==undefined) limits=Object.assign({},limits,{l:params.customLimL});
   var results=params.segments.map(function(seg){
     var rb=BANDS.find(function(b){return seg.radius>=b.rMin&&seg.radius<b.rMax;})||BANDS[4];
     var ri=BANDS.indexOf(rb), grade=RAIL_GRADES[seg.railGrade]||RAIL_GRADES["R260"];
@@ -1607,9 +1605,9 @@ function ComparePanel(props) {
   }
 
   var chartData = asr ? mergeData(prevSeg, corrSeg) : [];
-  var _baseLim = LIMITS[context]||{v:9,l:11};
-  var limV = (props.params&&props.params.customLimV!=null)?props.params.customLimV:_baseLim.v;
-  var limL = (props.params&&props.params.customLimL!=null)?props.params.customLimL:_baseLim.l;
+  var limV = LIMITS[context] && LIMITS[context].v;
+  var limL = LIMITS[context] && LIMITS[context].l;
+
   return (
     <div>
       {/* Header */}
@@ -2105,9 +2103,6 @@ export default function App() {
   const [strategy, setSt]   = useState("preventive");
   const [horizon,  setHz]   = useState(30);
   const [isBF,     setBF]   = useState(false);
-  const [customLimActive, setCustomLimActive] = useState(false);
-  const [customLimV,      setCustomLimV]      = useState(null);
-  const [customLimL,      setCustomLimL]      = useState(null);
   const [initCond, setIC]   = useState({r1:{wearV:0,wearL:0,rcf:0,mgt:0},r2:{wearV:0,wearL:0,rcf:0,mgt:0},r3:{wearV:0,wearL:0,rcf:0,mgt:0},r4:{wearV:0,wearL:0,rcf:0,mgt:0},r5:{wearV:0,wearL:0,rcf:0,mgt:0}});
   const [specialZones, setSpZ] = useState([]);
   const [result,   setRes]  = useState(null);
@@ -2209,9 +2204,9 @@ export default function App() {
     });
     var allSegs = active.concat(activeZones);
     if(allSegs.length===0){setErr("Enable at least one radius band or special zone.");return;}
-    try{setErr(null);var r=runSim({context:context,trains:trains,segments:allSegs,strategy:strategy,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon,customLimV:customLimActive?customLimV:null,customLimL:customLimActive?customLimL:null});setRes(r);setAi(0);setHR(true);}
+    try{setErr(null);var r=runSim({context:context,trains:trains,segments:allSegs,strategy:strategy,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon});setRes(r);setAi(0);setHR(true);}
     catch(e){setErr("Simulation error: "+e.message);}
-  },[context,trains,segs,strategy,railType,trackMode,speed,lubr,horizon,isBF,initCond,specialZones,customLimActive,customLimV,customLimL]);
+  },[context,trains,segs,strategy,railType,trackMode,speed,lubr,horizon,isBF,initCond,specialZones]);
 
   var asr=result&&result.results[aidx];
   var gp={railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,strategy:strategy};
@@ -3008,43 +3003,6 @@ export default function App() {
             <Btn onClick={addTrain} sm={true}>+ Add train type</Btn>
           </Card>
 
-
-          <Card title="Wear Limits">
-            <div style={{marginBottom:8,fontSize:11,color:cl.dim,lineHeight:1.6}}>
-              Default limits from context: V={LIMITS[context]&&LIMITS[context].v}mm | L={LIMITS[context]&&LIMITS[context].l}mm (EN 13674 / UIC 714)
-            </div>
-            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:customLimActive?12:0}}>
-              <div onClick={function(){
-                setCustomLimActive(function(v){
-                  var next=!v;
-                  if(next && !customLimV) setCustomLimV(LIMITS[context]&&LIMITS[context].v);
-                  if(next && !customLimL) setCustomLimL(LIMITS[context]&&LIMITS[context].l);
-                  return next;
-                });
-              }} style={{width:30,height:17,borderRadius:8,background:customLimActive?cl.teal:"rgba(255,255,255,0.1)",position:"relative",cursor:"pointer",flexShrink:0,border:"1px solid "+(customLimActive?cl.teal:"rgba(255,255,255,0.2)")}}>
-                <div style={{width:11,height:11,borderRadius:"50%",background:"#fff",position:"absolute",top:2,left:customLimActive?15:2}}/>
-              </div>
-              <span style={{fontSize:12,color:customLimActive?cl.teal:cl.dim,fontWeight:customLimActive?600:400}}>
-                Manual wear limits override
-              </span>
-              {customLimActive&&<span style={{marginLeft:"auto",fontSize:10,color:cl.amber,background:"rgba(251,191,36,0.1)",borderRadius:4,padding:"2px 8px",fontWeight:700}}>CUSTOM</span>}
-            </div>
-            {customLimActive&&(
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <div>
-                  <Lbl>Vertical wear limit (mm)</Lbl>
-                  <Inp value={customLimV||""} onChange={function(v){setCustomLimV(+v);}} min={1} max={30} step={0.5}/>
-                  <div style={{fontSize:10,color:cl.dim,marginTop:3}}>Default: {LIMITS[context]&&LIMITS[context].v} mm ({context})</div>
-                </div>
-                <div>
-                  <Lbl>Lateral wear limit (mm)</Lbl>
-                  <Inp value={customLimL||""} onChange={function(v){setCustomLimL(+v);}} min={1} max={30} step={0.5}/>
-                  <div style={{fontSize:10,color:cl.dim,marginTop:3}}>Default: {LIMITS[context]&&LIMITS[context].l} mm ({context})</div>
-                </div>
-              </div>
-            )}
-          </Card>
-
           <Card title="Track Layout by Radius Band">
             <div style={{fontSize:11,color:cl.dim,marginBottom:10,lineHeight:1.6}}>Enable bands present on your line. Enter single-track km.</div>
             <div style={{display:"flex",justifyContent:"space-between",marginBottom:10,padding:"5px 8px",background:"rgba(125,211,200,0.06)",borderRadius:6}}>
@@ -3104,7 +3062,7 @@ export default function App() {
                 <div style={{fontSize:11,color:cl.dim,marginBottom:12}}>Enter current measured values for each active segment.</div>
                 {segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(seg){
                   var ic=initCond[seg.id]||{wearV:0,wearL:0,rcf:0,mgt:0};
-                  var lim=Object.assign({},LIMITS[context],customLimActive&&customLimV?{v:customLimV}:{},customLimActive&&customLimL?{l:customLimL}:{});
+                  var lim=LIMITS[context];
                   var health=Math.max(ic.wearV/lim.v,ic.wearL/lim.l,ic.rcf);
                   var hcol=health<0.4?cl.green:health<0.7?cl.amber:cl.warn;
                   var hlbl=health<0.4?"GOOD":health<0.7?"MODERATE":"POOR";
@@ -3316,7 +3274,7 @@ export default function App() {
                       setGCMF(p.cMobilFix !== undefined ? p.cMobilFix : null);
                       setGCMK(p.cMobilKm  !== undefined ? p.cMobilKm  : null);
                     }}/>}
-                    {ctab==="cmp"&&<ComparePanel simResult={result} horizon={horizon} context={context} params={{context:context,trains:trains,segments:segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){var b=Object.assign({},s,{radius:s.repr,railGrade:s.grade});if(isBF&&initCond[s.id]){var ic=initCond[s.id];b.initWearV=ic.wearV||0;b.initWearL=ic.wearL||0;b.initRCF=ic.rcf||0;b.initMGT=ic.mgt||0;}return b;}),strategy:strategy,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon,customLimV:customLimActive?customLimV:null,customLimL:customLimActive?customLimL:null}} grindEurPerMl={liveGrindRate} replEurPerMl={liveReplRate} grindCostParams={liveGrindCost} calcReplRate={calcReplRateForGrade} currency={sharedCurrency}/>}
+                    {ctab==="cmp"&&<ComparePanel simResult={result} horizon={horizon} context={context} params={{context:context,trains:trains,segments:segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){var b=Object.assign({},s,{radius:s.repr,railGrade:s.grade});if(isBF&&initCond[s.id]){var ic=initCond[s.id];b.initWearV=ic.wearV||0;b.initWearL=ic.wearL||0;b.initRCF=ic.rcf||0;b.initMGT=ic.mgt||0;}return b;}),strategy:strategy,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon}} grindEurPerMl={liveGrindRate} replEurPerMl={liveReplRate} grindCostParams={liveGrindCost} calcReplRate={calcReplRateForGrade} currency={sharedCurrency}/>}
                   </div>
                   <div style={{background:"rgba(0,0,0,0.15)",borderRadius:10,border:"1px solid rgba(125,211,200,0.08)",overflow:"hidden"}}>
                     <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)",fontSize:11,letterSpacing:2,color:cl.teal,textTransform:"uppercase",fontWeight:700}}>Summary - All Segments</div>
