@@ -2118,7 +2118,7 @@ export default function App() {
   const [authed,   setAuthed]  = useState(false);
   const [authPwd,  setAuthPwd] = useState("");
   const [authErr,  setAuthErr] = useState(false);
-  const APP_PWD = "mohamed";
+  const APP_PWD = "RailSim2025";
 
   if(!authed) {
     return (
