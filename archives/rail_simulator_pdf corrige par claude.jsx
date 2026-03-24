@@ -1,5 +1,4 @@
 import React, { useState, useCallback, useMemo } from "react";
-import { jsPDF } from "jspdf";
 import { AreaChart, Area, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from "recharts";
 
 // ---- CONSTANTS ----
@@ -2739,623 +2738,623 @@ export default function App() {
   var gp={railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,strategy:strategy};
 
   function generatePDF() {
-    try {
-      var doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
-      var W=210, H=297;
-      var ml=15, mr=15, mt=15; // margins
-      var cw = W - ml - mr;    // content width
-      var y = mt;
-      var today = new Date().toLocaleDateString("en-GB");
-      var pName = projectName || "Unnamed Project";
-
-      // ---- COLORS ----
-      var TEAL   = [125,211,200];
-      var AMBER  = [251,191,36];
-      var WARN   = [248,113,113];
-      var GREEN  = [74,222,128];
-      var DARK   = [13,26,34];
-      var LIGHT  = [200,221,217];
-      var MUTED  = [136,153,170];
-      var WHITE  = [255,255,255];
-
-      // ---- HELPERS ----
-      function newPage() {
-        doc.addPage();
-        y = mt;
-        // subtle header bar
-        doc.setFillColor.apply(doc, DARK);
-        doc.rect(0,0,W,8,"F");
-        doc.setFontSize(7); doc.setTextColor.apply(doc, MUTED);
-        doc.text(pName, ml, 5.5);
-        doc.text("Rail Wear Simulator v1.2 - Mohamed BOUDIA", W-mr, 5.5, {align:"right"});
-        y = 14;
-      }
-
-      function checkY(needed) { if (y + needed > H - 15) { newPage(); } }
-
-      function sectionTitle(txt) {
-        checkY(12);
-        doc.setFillColor.apply(doc, TEAL);
-        doc.rect(ml, y, cw, 7, "F");
-        doc.setFontSize(10); doc.setFont("helvetica","bold");
-        doc.setTextColor.apply(doc, DARK);
-        doc.text(txt, ml+3, y+5);
-        y += 10;
-        doc.setFont("helvetica","normal");
-      }
-
-      function subTitle(txt) {
-        checkY(8);
-        doc.setFontSize(9); doc.setFont("helvetica","bold");
-        doc.setTextColor.apply(doc, TEAL);
-        doc.text(txt, ml, y+4);
-        doc.setFont("helvetica","normal");
-        y += 7;
-      }
-
-      function bodyText(txt, indent) {
-        var x = ml + (indent||0);
-        doc.setFontSize(8); doc.setTextColor.apply(doc, LIGHT);
-        var lines2 = doc.splitTextToSize(txt, cw - (indent||0));
-        checkY(lines2.length * 4 + 2);
-        doc.text(lines2, x, y);
-        y += lines2.length * 4 + 2;
-      }
-
-      function kpiRow(items) {
-        // items = [{label, value, unit, color}]
-        checkY(16);
-        var colW = cw / items.length;
-        items.forEach(function(item, i) {
-          var x = ml + i*colW;
-          var col = item.color || TEAL;
-          doc.setFillColor(col[0]*0.15+20, col[1]*0.15+20, col[2]*0.15+20);
-          doc.setDrawColor.apply(doc, col);
-          doc.roundedRect(x+1, y, colW-2, 14, 1.5, 1.5, "FD");
-          doc.setFontSize(7); doc.setTextColor.apply(doc, MUTED);
-          doc.text(item.label.toUpperCase(), x + colW/2, y+4, {align:"center"});
-          doc.setFontSize(10); doc.setFont("helvetica","bold");
-          doc.setTextColor.apply(doc, col);
-          doc.text(String(item.value), x + colW/2, y+10, {align:"center"});
-          doc.setFontSize(7); doc.setFont("helvetica","normal");
-          doc.setTextColor.apply(doc, MUTED);
-          if(item.unit) doc.text(item.unit, x + colW/2, y+13, {align:"center"});
-        });
-        y += 17;
-      }
-
-      function tableHeader(cols) {
-        // cols = [{label, w, align}]
-        checkY(8);
-        doc.setFillColor(25,45,55);
-        doc.rect(ml, y, cw, 6, "F");
-        doc.setFontSize(7); doc.setFont("helvetica","bold");
-        doc.setTextColor.apply(doc, TEAL);
-        var x = ml;
-        cols.forEach(function(col) {
-          var align = col.align || "left";
-          var tx = align==="right" ? x+col.w-1 : x+1;
-          doc.text(col.label, tx, y+4, {align:align==="right"?"right":"left"});
-          x += col.w;
-        });
-        doc.setFont("helvetica","normal");
-        y += 6;
-        return cols;
-      }
-
-      function tableRow(cols, vals, shade) {
-        checkY(6);
-        if(shade) { doc.setFillColor(18,35,44); doc.rect(ml,y,cw,5.5,"F"); }
-        doc.setFontSize(7); doc.setTextColor.apply(doc, LIGHT);
-        var x = ml;
-        cols.forEach(function(col, i) {
-          var val = String(vals[i]||"-");
-          var align = col.align || "left";
-          var col_color = col.color_fn ? col.color_fn(vals[i]) : null;
-          if(col_color) doc.setTextColor.apply(doc, col_color);
-          else doc.setTextColor.apply(doc, LIGHT);
-          var tx = align==="right" ? x+col.w-1 : x+1;
-          doc.text(val, tx, y+4, {align:align==="right"?"right":"left"});
-          x += col.w;
-        });
-        y += 5.5;
-      }
-
-      function tableDivider() {
-        doc.setDrawColor(30,55,65);
-        doc.line(ml, y, ml+cw, y);
-        y += 0.5;
-      }
-
-      function miniBarChart(data, dataKey, color, limitY, labelY) {
-        // Simple bar chart using jsPDF rectangles
-        checkY(36);
-        var chartH = 28, chartW = cw;
-        var n = data.length;
-        if(n===0) return;
-        var maxVal = limitY || Math.max.apply(null, data.map(function(d){return d[dataKey]||0;}));
-        if(maxVal===0) maxVal=1;
-
-        // Background
-        doc.setFillColor(13,26,34);
-        doc.rect(ml, y, chartW, chartH, "F");
-        // Limit line
-        doc.setDrawColor.apply(doc, WARN);
-        doc.setLineWidth(0.3);
-        var limitPx = chartH - (limitY/maxVal)*chartH*0.9;
-        if(limitY && limitY <= maxVal) {
-          doc.line(ml, y+limitPx, ml+chartW, y+limitPx);
-          doc.setFontSize(6); doc.setTextColor.apply(doc, WARN);
-          doc.text(labelY||"Limit", ml+chartW-1, y+limitPx-1, {align:"right"});
-        }
-        // Bars
-        var barW = Math.max(0.5, chartW/n - 0.3);
-        doc.setFillColor.apply(doc, color);
-        data.forEach(function(d,i) {
-          var val = d[dataKey]||0;
-          var bH = (val/maxVal)*chartH*0.88;
-          var bX = ml + i*(chartW/n);
-          doc.rect(bX, y+chartH-bH, barW, bH, "F");
-        });
-        // Year labels (every 5)
-        doc.setFontSize(5.5); doc.setTextColor.apply(doc, MUTED);
-        data.forEach(function(d,i) {
-          if(d.year%5===0) {
-            doc.text(String(d.year), ml+i*(chartW/n)+barW/2, y+chartH+3, {align:"center"});
-          }
-        });
-        doc.setFontSize(6); doc.setTextColor.apply(doc, MUTED);
-        doc.text("Year", ml+chartW/2, y+chartH+5, {align:"center"});
-        y += chartH + 7;
-      }
-
-      function fmt(v) {
-        if(v>=1e6) return (v/1e6).toFixed(2)+"M EUR";
-        if(v>=1e3) return (v/1e3).toFixed(1)+"k EUR";
-        return v.toFixed(0)+" EUR";
-      }
-
-      // ==============================
-      // PAGE 1 - COVER
-      // ==============================
+    var script = document.createElement("script");
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+    script.onload = function() {
+    var doc = new window.jspdf.jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+    var W=210, H=297;
+    var ml=15, mr=15, mt=15; // margins
+    var cw = W - ml - mr;    // content width
+    var y = mt;
+    var today = new Date().toLocaleDateString("en-GB");
+    var pName = projectName || "Unnamed Project";
+    
+    // ---- COLORS ----
+    var TEAL   = [125,211,200];
+    var AMBER  = [251,191,36];
+    var WARN   = [248,113,113];
+    var GREEN  = [74,222,128];
+    var DARK   = [13,26,34];
+    var LIGHT  = [200,221,217];
+    var MUTED  = [136,153,170];
+    var WHITE  = [255,255,255];
+    
+    // ---- HELPERS ----
+    function newPage() {
+      doc.addPage();
+      y = mt;
+      // subtle header bar
       doc.setFillColor.apply(doc, DARK);
-      doc.rect(0, 0, W, H, "F");
-      // Accent bar
+      doc.rect(0,0,W,8,"F");
+      doc.setFontSize(7); doc.setTextColor.apply(doc, MUTED);
+      doc.text(pName, ml, 5.5);
+      doc.text("Rail Wear Simulator v1.2 - Mohamed BOUDIA", W-mr, 5.5, {align:"right"});
+      y = 14;
+    }
+    
+    function checkY(needed) { if (y + needed > H - 15) { newPage(); } }
+    
+    function sectionTitle(txt) {
+      checkY(12);
       doc.setFillColor.apply(doc, TEAL);
-      doc.rect(0, 0, 6, H, "F");
-      // Title block
-      doc.setFontSize(26); doc.setFont("helvetica","bold");
-      doc.setTextColor.apply(doc, WHITE);
-      doc.text("Rail Wear &", ml+10, 60);
-      doc.text("Maintenance Report", ml+10, 74);
-      doc.setFontSize(13); doc.setFont("helvetica","normal");
-      doc.setTextColor.apply(doc, TEAL);
-      doc.text("Simulation Results and Lifecycle Cost Analysis", ml+10, 85);
-
-      // Project info box
-      doc.setFillColor(18,35,44);
-      doc.roundedRect(ml+8, 100, cw-8, 50, 2, 2, "F");
+      doc.rect(ml, y, cw, 7, "F");
+      doc.setFontSize(10); doc.setFont("helvetica","bold");
+      doc.setTextColor.apply(doc, DARK);
+      doc.text(txt, ml+3, y+5);
+      y += 10;
+      doc.setFont("helvetica","normal");
+    }
+    
+    function subTitle(txt) {
+      checkY(8);
       doc.setFontSize(9); doc.setFont("helvetica","bold");
       doc.setTextColor.apply(doc, TEAL);
-      doc.text("PROJECT", ml+14, 112);
-      doc.setFontSize(12); doc.setTextColor.apply(doc, WHITE);
-      doc.text(pName, ml+14, 121);
-      doc.setFontSize(8); doc.setFont("helvetica","normal");
-      doc.setTextColor.apply(doc, MUTED);
-      doc.text("Context: "+CONTEXTS[context].label, ml+14, 131);
-      doc.text("Simulation horizon: "+horizon+" years", ml+14, 137);
-      doc.text("Strategy: "+strategy.charAt(0).toUpperCase()+strategy.slice(1), ml+14, 143);
-      doc.text("Date: "+today, ml+14, 149);
-
-      // Quick stats
-      if(result) {
-        var repSegs = result.results.filter(function(r){return r.repY;}).length;
-        var totGrind = result.results.reduce(function(a,r){return a+r.gCount;},0);
-        doc.setFontSize(9); doc.setFont("helvetica","bold");
-        doc.setTextColor.apply(doc, AMBER);
-        doc.text("SUMMARY", ml+14, 165);
-        doc.setFont("helvetica","normal"); doc.setFontSize(8);
-        doc.setTextColor.apply(doc, LIGHT);
-        doc.text("Active segments: "+result.results.length, ml+14, 173);
-        doc.text("Replacements in horizon: "+repSegs+"/"+result.results.length, ml+14, 179);
-        doc.text("Total grinding passes: "+totGrind, ml+14, 185);
-        doc.text("Gross MGT/yr: "+result.mgtPY.toFixed(2)+" MGT", ml+14, 191);
-      }
-
-      // Footer
-      doc.setFontSize(7); doc.setTextColor.apply(doc, MUTED);
-      doc.text("Created by Mohamed BOUDIA | Rail Wear Simulator v1.2", ml+10, H-18);
-      doc.text("EN 13674-1 / UIC 714 / Infrabel/TU Delft 2023 / Guangzhou Metro 2021", ml+10, H-13);
-      doc.text("Page 1", W-mr, H-8, {align:"right"});
-
-      // ==============================
-      // PAGE 2 - PROJECT PARAMETERS
-      // ==============================
-      newPage();
-      sectionTitle("1. Project Parameters");
-
-      subTitle("1.1 Context and Global Settings");
-      var globalRows = [
-        ["Context", CONTEXTS[context].label],
-        ["Rail Type", RAIL_TYPES[railType].label],
-        ["Track Form", TRACK_MODES[trackMode].label],
-        ["Line Speed", speed+" km/h"],
-        ["Flange Lubrication", LUBRICATION[lubr].label],
-        ["Maintenance Strategy", strategy.charAt(0).toUpperCase()+strategy.slice(1)],
-        ["Simulation Horizon", horizon+" years"],
-        ["Brownfield Mode", isBF?"Enabled (existing rail)":"Disabled (new rail)"],
-      ];
-      var gCols = [{label:"Parameter",w:60},{label:"Value",w:cw-60}];
-      tableHeader(gCols);
-      globalRows.forEach(function(row,i){ tableRow(gCols,[row[0],row[1]],i%2===0); });
-      tableDivider(); y+=4;
-
-      subTitle("1.2 Train Fleet");
-      var tCols = [{label:"Type",w:28},{label:"Mode",w:22},{label:"Passes/day",w:22,align:"right"},{label:"Axle load (t)",w:24,align:"right"},{label:"Bogies",w:16,align:"right"},{label:"Axles/bogie",w:22,align:"right"},{label:"MGT/yr",w:cw-134,align:"right"}];
-      tableHeader(tCols);
-      trains.forEach(function(tr,i){
-        var ppd = calcPassesPerDay(tr);
-        var mgt = (ppd*tr.axleLoad*tr.bogies*tr.axlesPerBogie*365/1e6).toFixed(2);
-        var mode = tr.mileageActive?"Mileage":tr.weekActive?"Weekly profile":"Manual";
-        tableRow(tCols,[tr.label,mode,ppd.toFixed(1),tr.axleLoad,tr.bogies,tr.axlesPerBogie,mgt],i%2===0);
+      doc.text(txt, ml, y+4);
+      doc.setFont("helvetica","normal");
+      y += 7;
+    }
+    
+    function bodyText(txt, indent) {
+      var x = ml + (indent||0);
+      doc.setFontSize(8); doc.setTextColor.apply(doc, LIGHT);
+      var lines2 = doc.splitTextToSize(txt, cw - (indent||0));
+      checkY(lines2.length * 4 + 2);
+      doc.text(lines2, x, y);
+      y += lines2.length * 4 + 2;
+    }
+    
+    function kpiRow(items) {
+      // items = [{label, value, unit, color}]
+      checkY(16);
+      var colW = cw / items.length;
+      items.forEach(function(item, i) {
+        var x = ml + i*colW;
+        var col = item.color || TEAL;
+        doc.setFillColor(col[0]*0.15+20, col[1]*0.15+20, col[2]*0.15+20);
+        doc.setDrawColor.apply(doc, col);
+        doc.roundedRect(x+1, y, colW-2, 14, 1.5, 1.5, "FD");
+        doc.setFontSize(7); doc.setTextColor.apply(doc, MUTED);
+        doc.text(item.label.toUpperCase(), x + colW/2, y+4, {align:"center"});
+        doc.setFontSize(10); doc.setFont("helvetica","bold");
+        doc.setTextColor.apply(doc, col);
+        doc.text(String(item.value), x + colW/2, y+10, {align:"center"});
+        doc.setFontSize(7); doc.setFont("helvetica","normal");
+        doc.setTextColor.apply(doc, MUTED);
+        if(item.unit) doc.text(item.unit, x + colW/2, y+13, {align:"center"});
       });
-      // Weekly/mileage profile detail
-      trains.forEach(function(tr){
-        if(tr.weekActive && tr.weekProfile){
-          var wp=tr.weekProfile;
-          checkY(6);
-          doc.setFontSize(7); doc.setTextColor.apply(doc,MUTED);
-          doc.text("  "+tr.label+" weekly profile: Mon-Fri="+wp.weekday+" | Sat="+wp.saturday+" | Sun="+wp.sunday+" -> equiv "+calcPassesPerDay(tr).toFixed(1)+" passes/day", ml+2, y+4);
-          y+=6;
-        }
-        if(tr.mileageActive && tr.mileageProfile){
-          var mp=tr.mileageProfile;
-          checkY(6);
-          doc.setFontSize(7); doc.setTextColor.apply(doc,MUTED);
-          doc.text("  "+tr.label+" mileage: "+mp.fleetSize+" trains x "+mp.mileagePerTrain+"km/yr / "+mp.sectionKm+"km section -> "+calcPassesPerDay(tr).toFixed(1)+" passes/day", ml+2, y+4);
-          y+=6;
-        }
-      });
-      tableDivider();
-      var totalMGT = calcMGT(trains).toFixed(2);
-      var totalEqMGT = calcEqMGT(trains,context).toFixed(2);
+      y += 17;
+    }
+    
+    function tableHeader(cols) {
+      // cols = [{label, w, align}]
       checkY(8);
+      doc.setFillColor(25,45,55);
+      doc.rect(ml, y, cw, 6, "F");
       doc.setFontSize(7); doc.setFont("helvetica","bold");
-      doc.setTextColor.apply(doc,TEAL);
-      doc.text("Total: "+totalMGT+" MGT/yr gross | "+totalEqMGT+" MGT/yr equivalent", ml+1, y+4);
-      doc.setFont("helvetica","normal"); y+=8;
-
-      subTitle("1.3 Track Segments");
-      var sCols = [{label:"Segment",w:35},{label:"Radius (m)",w:22,align:"right"},{label:"Length (km)",w:24,align:"right"},{label:"Grade",w:20},{label:"fV",w:12,align:"right"},{label:"fL",w:12,align:"right"},{label:"Init.wearV",w:22,align:"right"},{label:"Init.RCF",w:18,align:"right"},{label:"Active",w:cw-165}];
-      tableHeader(sCols);
-      segs.forEach(function(seg,i){
-        var rb = BANDS.find(function(b){return b.id===seg.id;});
-        var ic = initCond[seg.id]||{wearV:0,rcf:0};
-        tableRow(sCols,[
-          seg.label,
-          seg.repr>=9000?"tangent":seg.repr,
-          seg.lengthKm.toFixed(1),
-          seg.grade,
-          rb?rb.f_v:"-",
-          rb?rb.f_l:"-",
-          isBF?ic.wearV.toFixed(1)+"mm":"-",
-          isBF?ic.rcf.toFixed(2):"-",
-          seg.active&&seg.lengthKm>0?"Yes":"No",
+      doc.setTextColor.apply(doc, TEAL);
+      var x = ml;
+      cols.forEach(function(col) {
+        var align = col.align || "left";
+        var tx = align==="right" ? x+col.w-1 : x+1;
+        doc.text(col.label, tx, y+4, {align:align==="right"?"right":"left"});
+        x += col.w;
+      });
+      doc.setFont("helvetica","normal");
+      y += 6;
+      return cols;
+    }
+    
+    function tableRow(cols, vals, shade) {
+      checkY(6);
+      if(shade) { doc.setFillColor(18,35,44); doc.rect(ml,y,cw,5.5,"F"); }
+      doc.setFontSize(7); doc.setTextColor.apply(doc, LIGHT);
+      var x = ml;
+      cols.forEach(function(col, i) {
+        var val = String(vals[i]||"-");
+        var align = col.align || "left";
+        var col_color = col.color_fn ? col.color_fn(vals[i]) : null;
+        if(col_color) doc.setTextColor.apply(doc, col_color);
+        else doc.setTextColor.apply(doc, LIGHT);
+        var tx = align==="right" ? x+col.w-1 : x+1;
+        doc.text(val, tx, y+4, {align:align==="right"?"right":"left"});
+        x += col.w;
+      });
+      y += 5.5;
+    }
+    
+    function tableDivider() {
+      doc.setDrawColor(30,55,65);
+      doc.line(ml, y, ml+cw, y);
+      y += 0.5;
+    }
+    
+    function miniBarChart(data, dataKey, color, limitY, labelY) {
+      // Simple bar chart using jsPDF rectangles
+      checkY(36);
+      var chartH = 28, chartW = cw;
+      var n = data.length;
+      if(n===0) return;
+      var maxVal = limitY || Math.max.apply(null, data.map(function(d){return d[dataKey]||0;}));
+      if(maxVal===0) maxVal=1;
+    
+      // Background
+      doc.setFillColor(13,26,34);
+      doc.rect(ml, y, chartW, chartH, "F");
+      // Limit line
+      doc.setDrawColor.apply(doc, WARN);
+      doc.setLineWidth(0.3);
+      var limitPx = chartH - (limitY/maxVal)*chartH*0.9;
+      if(limitY && limitY <= maxVal) {
+        doc.line(ml, y+limitPx, ml+chartW, y+limitPx);
+        doc.setFontSize(6); doc.setTextColor.apply(doc, WARN);
+        doc.text(labelY||"Limit", ml+chartW-1, y+limitPx-1, {align:"right"});
+      }
+      // Bars
+      var barW = Math.max(0.5, chartW/n - 0.3);
+      doc.setFillColor.apply(doc, color);
+      data.forEach(function(d,i) {
+        var val = d[dataKey]||0;
+        var bH = (val/maxVal)*chartH*0.88;
+        var bX = ml + i*(chartW/n);
+        doc.rect(bX, y+chartH-bH, barW, bH, "F");
+      });
+      // Year labels (every 5)
+      doc.setFontSize(5.5); doc.setTextColor.apply(doc, MUTED);
+      data.forEach(function(d,i) {
+        if(d.year%5===0) {
+          doc.text(String(d.year), ml+i*(chartW/n)+barW/2, y+chartH+3, {align:"center"});
+        }
+      });
+      doc.setFontSize(6); doc.setTextColor.apply(doc, MUTED);
+      doc.text("Year", ml+chartW/2, y+chartH+5, {align:"center"});
+      y += chartH + 7;
+    }
+    
+    function fmt(v) {
+      if(v>=1e6) return (v/1e6).toFixed(2)+"M EUR";
+      if(v>=1e3) return (v/1e3).toFixed(1)+"k EUR";
+      return v.toFixed(0)+" EUR";
+    }
+    
+    // ==============================
+    // PAGE 1 - COVER
+    // ==============================
+    doc.setFillColor.apply(doc, DARK);
+    doc.rect(0, 0, W, H, "F");
+    // Accent bar
+    doc.setFillColor.apply(doc, TEAL);
+    doc.rect(0, 0, 6, H, "F");
+    // Title block
+    doc.setFontSize(26); doc.setFont("helvetica","bold");
+    doc.setTextColor.apply(doc, WHITE);
+    doc.text("Rail Wear &", ml+10, 60);
+    doc.text("Maintenance Report", ml+10, 74);
+    doc.setFontSize(13); doc.setFont("helvetica","normal");
+    doc.setTextColor.apply(doc, TEAL);
+    doc.text("Simulation Results and Lifecycle Cost Analysis", ml+10, 85);
+    
+    // Project info box
+    doc.setFillColor(18,35,44);
+    doc.roundedRect(ml+8, 100, cw-8, 50, 2, 2, "F");
+    doc.setFontSize(9); doc.setFont("helvetica","bold");
+    doc.setTextColor.apply(doc, TEAL);
+    doc.text("PROJECT", ml+14, 112);
+    doc.setFontSize(12); doc.setTextColor.apply(doc, WHITE);
+    doc.text(pName, ml+14, 121);
+    doc.setFontSize(8); doc.setFont("helvetica","normal");
+    doc.setTextColor.apply(doc, MUTED);
+    doc.text("Context: "+CONTEXTS[context].label, ml+14, 131);
+    doc.text("Simulation horizon: "+horizon+" years", ml+14, 137);
+    doc.text("Strategy: "+strategy.charAt(0).toUpperCase()+strategy.slice(1), ml+14, 143);
+    doc.text("Date: "+today, ml+14, 149);
+    
+    // Quick stats
+    if(result) {
+      var repSegs = result.results.filter(function(r){return r.repY;}).length;
+      var totGrind = result.results.reduce(function(a,r){return a+r.gCount;},0);
+      doc.setFontSize(9); doc.setFont("helvetica","bold");
+      doc.setTextColor.apply(doc, AMBER);
+      doc.text("SUMMARY", ml+14, 165);
+      doc.setFont("helvetica","normal"); doc.setFontSize(8);
+      doc.setTextColor.apply(doc, LIGHT);
+      doc.text("Active segments: "+result.results.length, ml+14, 173);
+      doc.text("Replacements in horizon: "+repSegs+"/"+result.results.length, ml+14, 179);
+      doc.text("Total grinding passes: "+totGrind, ml+14, 185);
+      doc.text("Gross MGT/yr: "+result.mgtPY.toFixed(2)+" MGT", ml+14, 191);
+    }
+    
+    // Footer
+    doc.setFontSize(7); doc.setTextColor.apply(doc, MUTED);
+    doc.text("Created by Mohamed BOUDIA | Rail Wear Simulator v1.2", ml+10, H-18);
+    doc.text("EN 13674-1 / UIC 714 / Infrabel/TU Delft 2023 / Guangzhou Metro 2021", ml+10, H-13);
+    doc.text("Page 1", W-mr, H-8, {align:"right"});
+    
+    // ==============================
+    // PAGE 2 - PROJECT PARAMETERS
+    // ==============================
+    newPage();
+    sectionTitle("1. Project Parameters");
+    
+    subTitle("1.1 Context and Global Settings");
+    var globalRows = [
+      ["Context", CONTEXTS[context].label],
+      ["Rail Type", RAIL_TYPES[railType].label],
+      ["Track Form", TRACK_MODES[trackMode].label],
+      ["Line Speed", speed+" km/h"],
+      ["Flange Lubrication", LUBRICATION[lubr].label],
+      ["Maintenance Strategy", strategy.charAt(0).toUpperCase()+strategy.slice(1)],
+      ["Simulation Horizon", horizon+" years"],
+      ["Brownfield Mode", isBF?"Enabled (existing rail)":"Disabled (new rail)"],
+    ];
+    var gCols = [{label:"Parameter",w:60},{label:"Value",w:cw-60}];
+    tableHeader(gCols);
+    globalRows.forEach(function(row,i){ tableRow(gCols,[row[0],row[1]],i%2===0); });
+    tableDivider(); y+=4;
+    
+    subTitle("1.2 Train Fleet");
+    var tCols = [{label:"Type",w:28},{label:"Mode",w:22},{label:"Passes/day",w:22,align:"right"},{label:"Axle load (t)",w:24,align:"right"},{label:"Bogies",w:16,align:"right"},{label:"Axles/bogie",w:22,align:"right"},{label:"MGT/yr",w:cw-134,align:"right"}];
+    tableHeader(tCols);
+    trains.forEach(function(tr,i){
+      var ppd = calcPassesPerDay(tr);
+      var mgt = (ppd*tr.axleLoad*tr.bogies*tr.axlesPerBogie*365/1e6).toFixed(2);
+      var mode = tr.mileageActive?"Mileage":tr.weekActive?"Weekly profile":"Manual";
+      tableRow(tCols,[tr.label,mode,ppd.toFixed(1),tr.axleLoad,tr.bogies,tr.axlesPerBogie,mgt],i%2===0);
+    });
+    // Weekly/mileage profile detail
+    trains.forEach(function(tr){
+      if(tr.weekActive && tr.weekProfile){
+        var wp=tr.weekProfile;
+        checkY(6);
+        doc.setFontSize(7); doc.setTextColor.apply(doc,MUTED);
+        doc.text("  "+tr.label+" weekly profile: Mon-Fri="+wp.weekday+" | Sat="+wp.saturday+" | Sun="+wp.sunday+" -> equiv "+calcPassesPerDay(tr).toFixed(1)+" passes/day", ml+2, y+4);
+        y+=6;
+      }
+      if(tr.mileageActive && tr.mileageProfile){
+        var mp=tr.mileageProfile;
+        checkY(6);
+        doc.setFontSize(7); doc.setTextColor.apply(doc,MUTED);
+        doc.text("  "+tr.label+" mileage: "+mp.fleetSize+" trains x "+mp.mileagePerTrain+"km/yr / "+mp.sectionKm+"km section -> "+calcPassesPerDay(tr).toFixed(1)+" passes/day", ml+2, y+4);
+        y+=6;
+      }
+    });
+    tableDivider();
+    var totalMGT = calcMGT(trains).toFixed(2);
+    var totalEqMGT = calcEqMGT(trains,context).toFixed(2);
+    checkY(8);
+    doc.setFontSize(7); doc.setFont("helvetica","bold");
+    doc.setTextColor.apply(doc,TEAL);
+    doc.text("Total: "+totalMGT+" MGT/yr gross | "+totalEqMGT+" MGT/yr equivalent", ml+1, y+4);
+    doc.setFont("helvetica","normal"); y+=8;
+    
+    subTitle("1.3 Track Segments");
+    var sCols = [{label:"Segment",w:35},{label:"Radius (m)",w:22,align:"right"},{label:"Length (km)",w:24,align:"right"},{label:"Grade",w:20},{label:"fV",w:12,align:"right"},{label:"fL",w:12,align:"right"},{label:"Init.wearV",w:22,align:"right"},{label:"Init.RCF",w:18,align:"right"},{label:"Active",w:cw-165}];
+    tableHeader(sCols);
+    segs.forEach(function(seg,i){
+      var rb = BANDS.find(function(b){return b.id===seg.id;});
+      var ic = initCond[seg.id]||{wearV:0,rcf:0};
+      tableRow(sCols,[
+        seg.label,
+        seg.repr>=9000?"tangent":seg.repr,
+        seg.lengthKm.toFixed(1),
+        seg.grade,
+        rb?rb.f_v:"-",
+        rb?rb.f_l:"-",
+        isBF?ic.wearV.toFixed(1)+"mm":"-",
+        isBF?ic.rcf.toFixed(2):"-",
+        seg.active&&seg.lengthKm>0?"Yes":"No",
+      ],i%2===0);
+    });
+    tableDivider(); y+=4;
+    
+    // ==============================
+    // PAGE 3+ - RESULTS PER SEGMENT
+    // ==============================
+    if(result) {
+      result.results.forEach(function(r, si) {
+        newPage();
+        sectionTitle("2."+(si+1)+" Segment: "+r.seg.label);
+        var lim = r.limits;
+    
+        // KPIs
+        kpiRow([
+          {label:"Wear rate V",  value:r.wrV.toFixed(3), unit:"mm/100MGT", color:TEAL},
+          {label:"Wear rate L",  value:r.wrL.toFixed(3), unit:"mm/100MGT", color:AMBER},
+          {label:"Replacement",  value:r.repY?"Yr "+r.repY:"> "+horizon+" yrs", unit:"", color:r.repY?WARN:GREEN},
+          {label:"Grindings",    value:r.gCount,          unit:"passes",   color:TEAL},
+          {label:"Final RCF",    value:r.data.length?r.data[r.data.length-1].rcf.toFixed(2):"-", unit:"", color:MUTED},
+        ]);
+    
+        // Wear chart
+        subTitle("Vertical Wear Progression (mm)");
+        miniBarChart(r.data, "wearV", TEAL, lim.v, "V="+lim.v+"mm");
+    
+        subTitle("Lateral Wear Progression (mm)");
+        miniBarChart(r.data, "wearL", AMBER, lim.l, "L="+lim.l+"mm");
+    
+        // RCF chart
+        subTitle("RCF Index Progression");
+        miniBarChart(r.data, "rcf", WARN, 0.70, "Limit=0.70");
+    
+        // Annual data table (every 2 years to save space)
+        subTitle("Annual Data (every 2 years)");
+        var dCols = [
+          {label:"Year",w:16,align:"right"},
+          {label:"MGT acc.",w:22,align:"right"},
+          {label:"Wear V (mm)",w:26,align:"right"},
+          {label:"Wear L (mm)",w:26,align:"right"},
+          {label:"RCF",w:18,align:"right"},
+          {label:"Reserve (mm)",w:28,align:"right"},
+          {label:"Ground",w:18,align:"right"},
+          {label:"Replaced",w:cw-154,align:"right"},
+        ];
+        tableHeader(dCols);
+        r.data.forEach(function(d,i){
+          if(i%2===0||d.ground||d.repl) {
+            tableRow(dCols,[
+              d.year, d.mgt,
+              d.wearV.toFixed(2), d.wearL.toFixed(2),
+              d.rcf.toFixed(2), d.res.toFixed(1),
+              d.ground?"Yes":"-", d.repl?"REPLACED":"-",
+            ],i%2===0);
+          }
+        });
+        tableDivider();
+      });
+    }
+    
+    // ==============================
+    // COST SUMMARY PAGE
+    // ==============================
+    newPage();
+    sectionTitle("3. Lifecycle Cost Summary");
+    bodyText("Rates: grinding "+liveGrindRate.toFixed(0)+" EUR/ml/pass | replacement "+liveReplRate.toFixed(0)+" EUR/ml (from Grinding Cost and Replacement Cost tabs configuration).");
+    y+=4;
+    
+    if(result) {
+      subTitle("3.1 First Cycle (to first replacement)");
+      var costCols = [
+        {label:"Segment",w:35},
+        {label:"Grade",w:18},
+        {label:"Length (km)",w:22,align:"right"},
+        {label:"Repl. Yr",w:16,align:"right"},
+        {label:"Grindings",w:18,align:"right"},
+        {label:"Grind cost",w:26,align:"right"},
+        {label:"Repl. cost",w:26,align:"right"},
+        {label:"Total",w:cw-161,align:"right"},
+      ];
+      tableHeader(costCols);
+      var grandGrind=0, grandRepl=0;
+      result.results.forEach(function(r,i){
+        var grade = r.seg.grade||r.seg.railGrade||"R260";
+        var lenMl = (r.seg.lengthKm||0)*1000;
+        var passes = r.data?r.data.reduce(function(a,d){return a+d.ground;},0):0;
+        var gCost = lenMl*passes*liveGrindRate;
+        var rCost = r.repY?lenMl*liveReplRate:0;
+        var tot   = gCost+rCost;
+        grandGrind+=gCost; grandRepl+=rCost;
+        tableRow(costCols,[
+          r.seg.label, grade,
+          (r.seg.lengthKm||0).toFixed(1),
+          r.repY?"Yr "+r.repY:"> "+horizon+"yr",
+          passes,
+          fmt(gCost), rCost>0?fmt(rCost):"-", fmt(tot),
         ],i%2===0);
       });
-      tableDivider(); y+=4;
-
-      // ==============================
-      // PAGE 3+ - RESULTS PER SEGMENT
-      // ==============================
-      if(result) {
-        result.results.forEach(function(r, si) {
-          newPage();
-          sectionTitle("2."+(si+1)+" Segment: "+r.seg.label);
-          var lim = r.limits;
-
-          // KPIs
-          kpiRow([
-            {label:"Wear rate V",  value:r.wrV.toFixed(3), unit:"mm/100MGT", color:TEAL},
-            {label:"Wear rate L",  value:r.wrL.toFixed(3), unit:"mm/100MGT", color:AMBER},
-            {label:"Replacement",  value:r.repY?"Yr "+r.repY:"> "+horizon+" yrs", unit:"", color:r.repY?WARN:GREEN},
-            {label:"Grindings",    value:r.gCount,          unit:"passes",   color:TEAL},
-            {label:"Final RCF",    value:r.data.length?r.data[r.data.length-1].rcf.toFixed(2):"-", unit:"", color:MUTED},
-          ]);
-
-          // Wear chart
-          subTitle("Vertical Wear Progression (mm)");
-          miniBarChart(r.data, "wearV", TEAL, lim.v, "V="+lim.v+"mm");
-
-          subTitle("Lateral Wear Progression (mm)");
-          miniBarChart(r.data, "wearL", AMBER, lim.l, "L="+lim.l+"mm");
-
-          // RCF chart
-          subTitle("RCF Index Progression");
-          miniBarChart(r.data, "rcf", WARN, 0.70, "Limit=0.70");
-
-          // Annual data table (every 2 years to save space)
-          subTitle("Annual Data (every 2 years)");
-          var dCols = [
-            {label:"Year",w:16,align:"right"},
-            {label:"MGT acc.",w:22,align:"right"},
-            {label:"Wear V (mm)",w:26,align:"right"},
-            {label:"Wear L (mm)",w:26,align:"right"},
-            {label:"RCF",w:18,align:"right"},
-            {label:"Reserve (mm)",w:28,align:"right"},
-            {label:"Ground",w:18,align:"right"},
-            {label:"Replaced",w:cw-154,align:"right"},
-          ];
-          tableHeader(dCols);
-          r.data.forEach(function(d,i){
-            if(i%2===0||d.ground||d.repl) {
-              tableRow(dCols,[
-                d.year, d.mgt,
-                d.wearV.toFixed(2), d.wearL.toFixed(2),
-                d.rcf.toFixed(2), d.res.toFixed(1),
-                d.ground?"Yes":"-", d.repl?"REPLACED":"-",
-              ],i%2===0);
-            }
-          });
-          tableDivider();
-        });
-      }
-
-      // ==============================
-      // COST SUMMARY PAGE
-      // ==============================
-      newPage();
-      sectionTitle("3. Lifecycle Cost Summary");
-      bodyText("Rates: grinding "+liveGrindRate.toFixed(0)+" EUR/ml/pass | replacement "+liveReplRate.toFixed(0)+" EUR/ml (from Grinding Cost and Replacement Cost tabs configuration).");
-      y+=4;
-
-      if(result) {
-        subTitle("3.1 First Cycle (to first replacement)");
-        var costCols = [
-          {label:"Segment",w:35},
-          {label:"Grade",w:18},
-          {label:"Length (km)",w:22,align:"right"},
-          {label:"Repl. Yr",w:16,align:"right"},
-          {label:"Grindings",w:18,align:"right"},
-          {label:"Grind cost",w:26,align:"right"},
-          {label:"Repl. cost",w:26,align:"right"},
-          {label:"Total",w:cw-161,align:"right"},
-        ];
-        tableHeader(costCols);
-        var grandGrind=0, grandRepl=0;
-        result.results.forEach(function(r,i){
-          var grade = r.seg.grade||r.seg.railGrade||"R260";
-          var lenMl = (r.seg.lengthKm||0)*1000;
-          var passes = r.data?r.data.reduce(function(a,d){return a+d.ground;},0):0;
-          var gCost = lenMl*passes*liveGrindRate;
-          var rCost = r.repY?lenMl*liveReplRate:0;
-          var tot   = gCost+rCost;
-          grandGrind+=gCost; grandRepl+=rCost;
-          tableRow(costCols,[
-            r.seg.label, grade,
-            (r.seg.lengthKm||0).toFixed(1),
-            r.repY?"Yr "+r.repY:"> "+horizon+"yr",
-            passes,
-            fmt(gCost), rCost>0?fmt(rCost):"-", fmt(tot),
-          ],i%2===0);
-        });
-        tableDivider();
-        checkY(7);
-        doc.setFontSize(8); doc.setFont("helvetica","bold");
-        doc.setTextColor.apply(doc,TEAL);
-        doc.text("TOTAL FIRST CYCLE: "+fmt(grandGrind+grandRepl)+"  (Grinding: "+fmt(grandGrind)+" | Replacement: "+fmt(grandRepl)+")", ml+1, y+5);
-        doc.setFont("helvetica","normal"); y+=12;
-
-        subTitle("3.2 Full "+horizon+"-Year Horizon (greenfield at each replacement)");
-        var fhCols = [
-          {label:"Segment",w:35},
-          {label:"Repls",w:14,align:"right"},
-          {label:"Passes",w:16,align:"right"},
-          {label:"Grind cost",w:26,align:"right"},
-          {label:"Repl. cost",w:26,align:"right"},
-          {label:"Total "+horizon+"yr",w:cw-117,align:"right"},
-        ];
-        tableHeader(fhCols);
-        var fhGrandGrind=0, fhGrandRepl=0, fhGrandRepls=0;
-        result.results.forEach(function(r,i){
-          var lenMl = (r.seg.lengthKm||0)*1000;
-          var passes = r.data?r.data.reduce(function(a,d){return a+d.ground;},0):0;
-          var gCostCycle = lenMl*passes*liveGrindRate;
-          var rCostCycle = r.repY?lenMl*liveReplRate:0;
-          var repls=0, totGrind=0, totRepl=0, totPass=0, yr=0;
-          if(r.repY){
-            var cl2=r.repY;
-            while(yr+cl2<=horizon){yr+=cl2;repls+=1;totGrind+=gCostCycle;totRepl+=rCostCycle;totPass+=passes;}
-            var frac=(horizon-yr)/cl2;
-            if(frac>0){totGrind+=gCostCycle*frac;totPass+=Math.round(passes*frac);}
-          } else {
-            totGrind=gCostCycle; totPass=passes;
-          }
-          fhGrandGrind+=totGrind; fhGrandRepl+=totRepl; fhGrandRepls+=repls;
-          tableRow(fhCols,[
-            r.seg.label, repls, totPass,
-            fmt(totGrind), totRepl>0?fmt(totRepl):"-", fmt(totGrind+totRepl),
-          ],i%2===0);
-        });
-        tableDivider();
-        checkY(7);
-        doc.setFontSize(8); doc.setFont("helvetica","bold");
-        doc.setTextColor.apply(doc,TEAL);
-        doc.text("TOTAL "+horizon+"YR: "+fmt(fhGrandGrind+fhGrandRepl)+"  ("+fhGrandRepls+" replacements | Grinding: "+fmt(fhGrandGrind)+" | Replacement: "+fmt(fhGrandRepl)+")", ml+1, y+5);
-        doc.setFont("helvetica","normal"); y+=10;
-      }
-
-      // ==============================
-      // COMPARISON PAGE
-      // ==============================
-      newPage();
-      sectionTitle("4. Strategy Comparison: Preventive vs Corrective");
-
-      if(result) {
-        // Run both strategies using current params
-        var activeSegsForCmp = segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){
-          var b=Object.assign({},s,{radius:s.repr,railGrade:s.grade});
-          if(isBF&&initCond[s.id]){var ic=initCond[s.id];b.initWearV=ic.wearV||0;b.initWearL=ic.wearL||0;b.initRCF=ic.rcf||0;}
-          return b;
-        });
-        var baseParams={context:context,trains:trains,segments:activeSegsForCmp,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon};
-        var rPrev=runSim(Object.assign({},baseParams,{strategy:"preventive"}));
-        var rCorr=runSim(Object.assign({},baseParams,{strategy:"corrective"}));
-
-        // Summary KPIs
-        var pRepls=rPrev.results.filter(function(r){return r.repY;}).length;
-        var cRepls=rCorr.results.filter(function(r){return r.repY;}).length;
-        var pGrinds=rPrev.results.reduce(function(a,r){return a+r.gCount;},0);
-        var cGrinds=rCorr.results.reduce(function(a,r){return a+r.gCount;},0);
-
-        kpiRow([
-          {label:"Replacements PREV", value:pRepls+" seg",     unit:"", color:TEAL},
-          {label:"Replacements CORR", value:cRepls+" seg",     unit:"", color:AMBER},
-          {label:"Grindings PREV",    value:pGrinds+" passes", unit:"", color:TEAL},
-          {label:"Grindings CORR",    value:cGrinds+" passes", unit:"", color:AMBER},
-        ]);
-
-        // First cycle comparison table
-        subTitle("4.1 First Cycle Comparison");
-        var cmpCols=[
-          {label:"Segment",w:32},
-          {label:"Repl.yr PREV",w:20,align:"right"},
-          {label:"Repl.yr CORR",w:20,align:"right"},
-          {label:"Delta yr",w:16,align:"right"},
-          {label:"Grind PREV",w:24,align:"right"},
-          {label:"Grind CORR",w:24,align:"right"},
-          {label:"Repl PREV",w:22,align:"right"},
-          {label:"Repl CORR",w:22,align:"right"},
-          {label:"Saving",w:cw-180,align:"right"},
-        ];
-        tableHeader(cmpCols);
-        var totPrev1=0, totCorr1=0;
-        rPrev.results.forEach(function(pr,i){
-          var cr=rCorr.results[i];
-          if(!cr)return;
-          var lenMl=(pr.seg.lengthKm||0)*1000;
-          var pPass=pr.data?pr.data.reduce(function(a,d){return a+d.ground;},0):0;
-          var cPass=cr.data?cr.data.reduce(function(a,d){return a+d.ground;},0):0;
-          var pG=lenMl*pPass*liveGrindRate, cG=lenMl*cPass*liveGrindRate;
-          var pR=pr.repY?lenMl*liveReplRate:0, cR=cr.repY?lenMl*liveReplRate:0;
-          var pT=pG+pR, cT=cG+cR, sav=cT-pT;
-          totPrev1+=pT; totCorr1+=cT;
-          var dYr=(cr.repY||(horizon+1))-(pr.repY||(horizon+1));
-          tableRow(cmpCols,[
-            pr.seg.label,
-            pr.repY?"Yr "+pr.repY:">"+horizon+"yr",
-            cr.repY?"Yr "+cr.repY:">"+horizon+"yr",
-            dYr>0?"+"+dYr+"yr":dYr+"yr",
-            fmt(pG), fmt(cG),
-            pR>0?fmt(pR):"-", cR>0?fmt(cR):"-",
-            (sav>0?"+":"")+fmt(sav),
-          ],i%2===0);
-        });
-        tableDivider();
-        checkY(8);
-        doc.setFontSize(8); doc.setFont("helvetica","bold");
-        doc.setTextColor.apply(doc,(totCorr1-totPrev1)>0?TEAL:WARN);
-        doc.text("FIRST CYCLE - PREV: "+fmt(totPrev1)+" | CORR: "+fmt(totCorr1)+" | Saving: "+((totCorr1-totPrev1)>0?"+":"")+fmt(totCorr1-totPrev1), ml+1, y+5);
-        doc.setFont("helvetica","normal"); y+=12;
-
-        // Full horizon comparison table
-        subTitle("4.2 Full "+horizon+"-Year Horizon Comparison");
-        tableHeader(cmpCols);
-        var totPrevFH=0, totCorrFH=0;
-        rPrev.results.forEach(function(pr,i){
-          var cr=rCorr.results[i];
-          if(!cr)return;
-          var lenMl=(pr.seg.lengthKm||0)*1000;
-          var pPass=pr.data?pr.data.reduce(function(a,d){return a+d.ground;},0):0;
-          var cPass=cr.data?cr.data.reduce(function(a,d){return a+d.ground;},0):0;
-          var pGCyc=lenMl*pPass*liveGrindRate, cGCyc=lenMl*cPass*liveGrindRate;
-          var pRCyc=pr.repY?lenMl*liveReplRate:0, cRCyc=cr.repY?lenMl*liveReplRate:0;
-          function fhCalc(repY,gCyc,rCyc){
-            if(!repY)return{g:gCyc,r:0,repls:0};
-            var yr=0,g=0,r=0,repls=0;
-            while(yr+repY<=horizon){yr+=repY;repls++;g+=gCyc;r+=rCyc;}
-            var frac=(horizon-yr)/repY;
-            if(frac>0)g+=gCyc*frac;
-            return{g:g,r:r,repls:repls};
-          }
-          var pfh=fhCalc(pr.repY,pGCyc,pRCyc);
-          var cfh=fhCalc(cr.repY,cGCyc,cRCyc);
-          var pT=pfh.g+pfh.r, cT=cfh.g+cfh.r, sav=cT-pT;
-          totPrevFH+=pT; totCorrFH+=cT;
-          var dYr=(cr.repY||(horizon+1))-(pr.repY||(horizon+1));
-          tableRow(cmpCols,[
-            pr.seg.label+" ("+pfh.repls+"r vs "+cfh.repls+"r)",
-            pr.repY?"Yr "+pr.repY:">"+horizon+"yr",
-            cr.repY?"Yr "+cr.repY:">"+horizon+"yr",
-            dYr>0?"+"+dYr+"yr":dYr+"yr",
-            fmt(pfh.g), fmt(cfh.g),
-            pfh.r>0?fmt(pfh.r):"-", cfh.r>0?fmt(cfh.r):"-",
-            (sav>0?"+":"")+fmt(sav),
-          ],i%2===0);
-        });
-        tableDivider();
-        checkY(8);
-        doc.setFontSize(8); doc.setFont("helvetica","bold");
-        doc.setTextColor.apply(doc,(totCorrFH-totPrevFH)>0?TEAL:WARN);
-        doc.text(horizon+"YR - PREV: "+fmt(totPrevFH)+" | CORR: "+fmt(totCorrFH)+" | Saving: "+((totCorrFH-totPrevFH)>0?"+":"")+fmt(totCorrFH-totPrevFH), ml+1, y+5);
-        doc.setFont("helvetica","normal"); y+=10;
-        bodyText("Assumption: each replacement starts from new rail (greenfield). Partial final cycle: grinding prorated, no replacement if horizon ends before next rail change.");
-      } else {
-        bodyText("Run the simulation first, then export the report to include comparison data.");
-      }
-
-      // ==============================
-      // DISCLAIMER + SOURCES PAGE
-      // ==============================
-      newPage();
-      sectionTitle("5. Disclaimer and Sources");
-
-      subTitle("Disclaimer");
-      bodyText("This report is generated by Rail Wear Simulator v1.2. Results are based on mathematical models calibrated on published field data. They are intended for planning and budgeting purposes only and should be validated against local field measurements and contractor quotes before final budget submission.");
-      bodyText("Cost estimates use indicative reference rates for the selected region and may not reflect actual contract prices, site conditions, or local regulations. The simulator does not model: inner/outer rail asymmetry, wheel profile evolution, seasonal effects, station braking zones, or switch/crossing wear.");
-      y+=4;
-
-      subTitle("Standards and Normative References");
-      var srcs = [
-        "EN 13674-1:2011 - Railway applications. Track. Rail. Vignole railway rails 46 kg/m and above",
-        "UIC 714R - Classification of lines for the purpose of track maintenance (2004)",
-        "EN 13231-3:2012 - Railway applications. Track. Acceptance of works. Rail grinding",
-        "prEN 17343 - Railway applications. Track. Rail grinding specification (CEN)",
-        "AREMA Manual for Railway Engineering, Chapter 4 - Rail (2022)",
-        "ASTM E2660 - Standard guide for wear measurement in railway track",
+      tableDivider();
+      checkY(7);
+      doc.setFontSize(8); doc.setFont("helvetica","bold");
+      doc.setTextColor.apply(doc,TEAL);
+      doc.text("TOTAL FIRST CYCLE: "+fmt(grandGrind+grandRepl)+"  (Grinding: "+fmt(grandGrind)+" | Replacement: "+fmt(grandRepl)+")", ml+1, y+5);
+      doc.setFont("helvetica","normal"); y+=12;
+    
+      subTitle("3.2 Full "+horizon+"-Year Horizon (greenfield at each replacement)");
+      var fhCols = [
+        {label:"Segment",w:35},
+        {label:"Repls",w:14,align:"right"},
+        {label:"Passes",w:16,align:"right"},
+        {label:"Grind cost",w:26,align:"right"},
+        {label:"Repl. cost",w:26,align:"right"},
+        {label:"Total "+horizon+"yr",w:cw-117,align:"right"},
       ];
-      srcs.forEach(function(s){ bodyText("- "+s, 3); });
-      y+=4;
-
-      subTitle("Scientific References");
-      var papers = [
-        "Infrabel/TU Delft (2023): Statistical analysis of rail wear on Belgian network, Wear 522. DOI: 10.1016/j.wear.2022.204764",
-        "Liu B. et al. (2021): Field investigation of rail wear on Guangzhou Metro, Wear 477. DOI: 10.1016/j.wear.2021.203830",
-        "Archard J.F. (1953): Contact and Rubbing of Flat Surfaces, J.Applied Physics 24(8). DOI: 10.1063/1.1721448",
-        "Ringsberg J.W. (2001): Life prediction of rolling contact fatigue crack initiation, Int.J.Fatigue 23(7). DOI: 10.1016/S0142-1123(01)00011-5",
-        "Grassie S.L. (2005): Rail corrugation: advances in measurement, understanding and treatment, Wear 258. DOI: 10.1016/j.wear.2004.03.066",
-        "Rame I. et al. (2018): Abrasive wear of grinding wheels in rail grinding, Wear 406-407. DOI: 10.1016/j.wear.2018.01.012",
-      ];
-      papers.forEach(function(p){ bodyText("- "+p, 3); });
-      y+=6;
-
-      // Page numbers
-      var totalPages = doc.getNumberOfPages();
-      for(var pg=2; pg<=totalPages; pg++) {
-        doc.setPage(pg);
-        doc.setFontSize(7); doc.setTextColor.apply(doc, MUTED);
-        doc.text("Page "+pg+"/"+totalPages, W-mr, H-8, {align:"right"});
-        doc.text(today, ml, H-8);
-      }
-
-      // Save
-      var fname = (pName.replace(/[^a-zA-Z0-9_-]/g,"_")||"rail_report")+"_"+today.replace(/\//g,"-")+".pdf";
-      doc.save(fname);
-      setShowRpt(false);
-    } catch (errPdf) {
-      console.error("PDF generation failed:", errPdf);
-      alert("Could not generate the PDF report. Check the browser console for details.");
+      tableHeader(fhCols);
+      var fhGrandGrind=0, fhGrandRepl=0, fhGrandRepls=0;
+      result.results.forEach(function(r,i){
+        var lenMl = (r.seg.lengthKm||0)*1000;
+        var passes = r.data?r.data.reduce(function(a,d){return a+d.ground;},0):0;
+        var gCostCycle = lenMl*passes*liveGrindRate;
+        var rCostCycle = r.repY?lenMl*liveReplRate:0;
+        var repls=0, totGrind=0, totRepl=0, totPass=0, yr=0;
+        if(r.repY){
+          var cl2=r.repY;
+          while(yr+cl2<=horizon){yr+=cl2;repls+=1;totGrind+=gCostCycle;totRepl+=rCostCycle;totPass+=passes;}
+          var frac=(horizon-yr)/cl2;
+          if(frac>0){totGrind+=gCostCycle*frac;totPass+=Math.round(passes*frac);}
+        } else {
+          totGrind=gCostCycle; totPass=passes;
+        }
+        fhGrandGrind+=totGrind; fhGrandRepl+=totRepl; fhGrandRepls+=repls;
+        tableRow(fhCols,[
+          r.seg.label, repls, totPass,
+          fmt(totGrind), totRepl>0?fmt(totRepl):"-", fmt(totGrind+totRepl),
+        ],i%2===0);
+      });
+      tableDivider();
+      checkY(7);
+      doc.setFontSize(8); doc.setFont("helvetica","bold");
+      doc.setTextColor.apply(doc,TEAL);
+      doc.text("TOTAL "+horizon+"YR: "+fmt(fhGrandGrind+fhGrandRepl)+"  ("+fhGrandRepls+" replacements | Grinding: "+fmt(fhGrandGrind)+" | Replacement: "+fmt(fhGrandRepl)+")", ml+1, y+5);
+      doc.setFont("helvetica","normal"); y+=10;
     }
+    
+    // ==============================
+    // COMPARISON PAGE
+    // ==============================
+    newPage();
+    sectionTitle("4. Strategy Comparison: Preventive vs Corrective");
+    
+    if(result) {
+      // Run both strategies using current params
+      var activeSegsForCmp = segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){
+        var b=Object.assign({},s,{radius:s.repr,railGrade:s.grade});
+        if(isBF&&initCond[s.id]){var ic=initCond[s.id];b.initWearV=ic.wearV||0;b.initWearL=ic.wearL||0;b.initRCF=ic.rcf||0;}
+        return b;
+      });
+      var baseParams={context:context,trains:trains,segments:activeSegsForCmp,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon};
+      var rPrev=runSim(Object.assign({},baseParams,{strategy:"preventive"}));
+      var rCorr=runSim(Object.assign({},baseParams,{strategy:"corrective"}));
+    
+      // Summary KPIs
+      var pRepls=rPrev.results.filter(function(r){return r.repY;}).length;
+      var cRepls=rCorr.results.filter(function(r){return r.repY;}).length;
+      var pGrinds=rPrev.results.reduce(function(a,r){return a+r.gCount;},0);
+      var cGrinds=rCorr.results.reduce(function(a,r){return a+r.gCount;},0);
+    
+      kpiRow([
+        {label:"Replacements PREV", value:pRepls+" seg",     unit:"", color:TEAL},
+        {label:"Replacements CORR", value:cRepls+" seg",     unit:"", color:AMBER},
+        {label:"Grindings PREV",    value:pGrinds+" passes", unit:"", color:TEAL},
+        {label:"Grindings CORR",    value:cGrinds+" passes", unit:"", color:AMBER},
+      ]);
+    
+      // First cycle comparison table
+      subTitle("4.1 First Cycle Comparison");
+      var cmpCols=[
+        {label:"Segment",w:32},
+        {label:"Repl.yr PREV",w:20,align:"right"},
+        {label:"Repl.yr CORR",w:20,align:"right"},
+        {label:"Delta yr",w:16,align:"right"},
+        {label:"Grind PREV",w:24,align:"right"},
+        {label:"Grind CORR",w:24,align:"right"},
+        {label:"Repl PREV",w:22,align:"right"},
+        {label:"Repl CORR",w:22,align:"right"},
+        {label:"Saving",w:cw-180,align:"right"},
+      ];
+      tableHeader(cmpCols);
+      var totPrev1=0, totCorr1=0;
+      rPrev.results.forEach(function(pr,i){
+        var cr=rCorr.results[i];
+        if(!cr)return;
+        var lenMl=(pr.seg.lengthKm||0)*1000;
+        var pPass=pr.data?pr.data.reduce(function(a,d){return a+d.ground;},0):0;
+        var cPass=cr.data?cr.data.reduce(function(a,d){return a+d.ground;},0):0;
+        var pG=lenMl*pPass*liveGrindRate, cG=lenMl*cPass*liveGrindRate;
+        var pR=pr.repY?lenMl*liveReplRate:0, cR=cr.repY?lenMl*liveReplRate:0;
+        var pT=pG+pR, cT=cG+cR, sav=cT-pT;
+        totPrev1+=pT; totCorr1+=cT;
+        var dYr=(cr.repY||(horizon+1))-(pr.repY||(horizon+1));
+        tableRow(cmpCols,[
+          pr.seg.label,
+          pr.repY?"Yr "+pr.repY:">"+horizon+"yr",
+          cr.repY?"Yr "+cr.repY:">"+horizon+"yr",
+          dYr>0?"+"+dYr+"yr":dYr+"yr",
+          fmt(pG), fmt(cG),
+          pR>0?fmt(pR):"-", cR>0?fmt(cR):"-",
+          (sav>0?"+":"")+fmt(sav),
+        ],i%2===0);
+      });
+      tableDivider();
+      checkY(8);
+      doc.setFontSize(8); doc.setFont("helvetica","bold");
+      doc.setTextColor.apply(doc,(totCorr1-totPrev1)>0?TEAL:WARN);
+      doc.text("FIRST CYCLE - PREV: "+fmt(totPrev1)+" | CORR: "+fmt(totCorr1)+" | Saving: "+((totCorr1-totPrev1)>0?"+":"")+fmt(totCorr1-totPrev1), ml+1, y+5);
+      doc.setFont("helvetica","normal"); y+=12;
+    
+      // Full horizon comparison table
+      subTitle("4.2 Full "+horizon+"-Year Horizon Comparison");
+      tableHeader(cmpCols);
+      var totPrevFH=0, totCorrFH=0;
+      rPrev.results.forEach(function(pr,i){
+        var cr=rCorr.results[i];
+        if(!cr)return;
+        var lenMl=(pr.seg.lengthKm||0)*1000;
+        var pPass=pr.data?pr.data.reduce(function(a,d){return a+d.ground;},0):0;
+        var cPass=cr.data?cr.data.reduce(function(a,d){return a+d.ground;},0):0;
+        var pGCyc=lenMl*pPass*liveGrindRate, cGCyc=lenMl*cPass*liveGrindRate;
+        var pRCyc=pr.repY?lenMl*liveReplRate:0, cRCyc=cr.repY?lenMl*liveReplRate:0;
+        function fhCalc(repY,gCyc,rCyc){
+          if(!repY)return{g:gCyc,r:0,repls:0};
+          var yr=0,g=0,r=0,repls=0;
+          while(yr+repY<=horizon){yr+=repY;repls++;g+=gCyc;r+=rCyc;}
+          var frac=(horizon-yr)/repY;
+          if(frac>0)g+=gCyc*frac;
+          return{g:g,r:r,repls:repls};
+        }
+        var pfh=fhCalc(pr.repY,pGCyc,pRCyc);
+        var cfh=fhCalc(cr.repY,cGCyc,cRCyc);
+        var pT=pfh.g+pfh.r, cT=cfh.g+cfh.r, sav=cT-pT;
+        totPrevFH+=pT; totCorrFH+=cT;
+        var dYr=(cr.repY||(horizon+1))-(pr.repY||(horizon+1));
+        tableRow(cmpCols,[
+          pr.seg.label+" ("+pfh.repls+"r vs "+cfh.repls+"r)",
+          pr.repY?"Yr "+pr.repY:">"+horizon+"yr",
+          cr.repY?"Yr "+cr.repY:">"+horizon+"yr",
+          dYr>0?"+"+dYr+"yr":dYr+"yr",
+          fmt(pfh.g), fmt(cfh.g),
+          pfh.r>0?fmt(pfh.r):"-", cfh.r>0?fmt(cfh.r):"-",
+          (sav>0?"+":"")+fmt(sav),
+        ],i%2===0);
+      });
+      tableDivider();
+      checkY(8);
+      doc.setFontSize(8); doc.setFont("helvetica","bold");
+      doc.setTextColor.apply(doc,(totCorrFH-totPrevFH)>0?TEAL:WARN);
+      doc.text(horizon+"YR - PREV: "+fmt(totPrevFH)+" | CORR: "+fmt(totCorrFH)+" | Saving: "+((totCorrFH-totPrevFH)>0?"+":"")+fmt(totCorrFH-totPrevFH), ml+1, y+5);
+      doc.setFont("helvetica","normal"); y+=10;
+      bodyText("Assumption: each replacement starts from new rail (greenfield). Partial final cycle: grinding prorated, no replacement if horizon ends before next rail change.");
+    } else {
+      bodyText("Run the simulation first, then export the report to include comparison data.");
+    }
+    
+    // ==============================
+    // DISCLAIMER + SOURCES PAGE
+    // ==============================
+    newPage();
+    sectionTitle("5. Disclaimer and Sources");
+    
+    subTitle("Disclaimer");
+    bodyText("This report is generated by Rail Wear Simulator v1.2. Results are based on mathematical models calibrated on published field data. They are intended for planning and budgeting purposes only and should be validated against local field measurements and contractor quotes before final budget submission.");
+    bodyText("Cost estimates use indicative reference rates for the selected region and may not reflect actual contract prices, site conditions, or local regulations. The simulator does not model: inner/outer rail asymmetry, wheel profile evolution, seasonal effects, station braking zones, or switch/crossing wear.");
+    y+=4;
+    
+    subTitle("Standards and Normative References");
+    var srcs = [
+      "EN 13674-1:2011 - Railway applications. Track. Rail. Vignole railway rails 46 kg/m and above",
+      "UIC 714R - Classification of lines for the purpose of track maintenance (2004)",
+      "EN 13231-3:2012 - Railway applications. Track. Acceptance of works. Rail grinding",
+      "prEN 17343 - Railway applications. Track. Rail grinding specification (CEN)",
+      "AREMA Manual for Railway Engineering, Chapter 4 - Rail (2022)",
+      "ASTM E2660 - Standard guide for wear measurement in railway track",
+    ];
+    srcs.forEach(function(s){ bodyText("- "+s, 3); });
+    y+=4;
+    
+    subTitle("Scientific References");
+    var papers = [
+      "Infrabel/TU Delft (2023): Statistical analysis of rail wear on Belgian network, Wear 522. DOI: 10.1016/j.wear.2022.204764",
+      "Liu B. et al. (2021): Field investigation of rail wear on Guangzhou Metro, Wear 477. DOI: 10.1016/j.wear.2021.203830",
+      "Archard J.F. (1953): Contact and Rubbing of Flat Surfaces, J.Applied Physics 24(8). DOI: 10.1063/1.1721448",
+      "Ringsberg J.W. (2001): Life prediction of rolling contact fatigue crack initiation, Int.J.Fatigue 23(7). DOI: 10.1016/S0142-1123(01)00011-5",
+      "Grassie S.L. (2005): Rail corrugation: advances in measurement, understanding and treatment, Wear 258. DOI: 10.1016/j.wear.2004.03.066",
+      "Rame I. et al. (2018): Abrasive wear of grinding wheels in rail grinding, Wear 406-407. DOI: 10.1016/j.wear.2018.01.012",
+    ];
+    papers.forEach(function(p){ bodyText("- "+p, 3); });
+    y+=6;
+    
+    // Page numbers
+    var totalPages = doc.getNumberOfPages();
+    for(var pg=2; pg<=totalPages; pg++) {
+      doc.setPage(pg);
+      doc.setFontSize(7); doc.setTextColor.apply(doc, MUTED);
+      doc.text("Page "+pg+"/"+totalPages, W-mr, H-8, {align:"right"});
+      doc.text(today, ml, H-8);
+    }
+    
+    // Save
+    var fname = (pName.replace(/[^a-zA-Z0-9_-]/g,"_")||"rail_report")+"_"+today.replace(/\//g,"-")+".pdf";
+    doc.save(fname);
+    setShowRpt(false);
+    };
+    document.head.appendChild(script);
   }
 
   if(!authed) {
