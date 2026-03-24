@@ -2738,11 +2738,9 @@ export default function App() {
   var gp={railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,strategy:strategy};
 
   function generatePDF() {
-    function runPDF() {
-      if(!window.jspdf || !window.jspdf.jsPDF) {
-        alert("PDF library not available. Please check your internet connection and try again.");
-        return;
-      }
+    var script = document.createElement("script");
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
+    script.onload = function() {
       var doc = new window.jspdf.jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
       var W=210, H=297;
       var ml=15, mr=15, mt=15; // margins
@@ -3355,20 +3353,8 @@ export default function App() {
       var fname = (pName.replace(/[^a-zA-Z0-9_-]/g,"_")||"rail_report")+"_"+today.replace(/\//g,"-")+".pdf";
       doc.save(fname);
       setShowRpt(false);
-    }
-    if(window.jspdf && window.jspdf.jsPDF) {
-      runPDF();
-    } else if(document.querySelector("script[data-jspdf]")) {
-      var wait=setInterval(function(){if(window.jspdf&&window.jspdf.jsPDF){clearInterval(wait);runPDF();}},100);
-      setTimeout(function(){clearInterval(wait);},10000);
-    } else {
-      var script = document.createElement("script");
-      script.setAttribute("data-jspdf","1");
-      script.src = "https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js";
-      script.onload = function() { runPDF(); };
-      script.onerror = function() { alert("Could not load PDF library (jsPDF). Check your internet connection."); };
-      document.head.appendChild(script);
-    }
+    };
+    document.head.appendChild(script);
   }
 
   if(!authed) {
