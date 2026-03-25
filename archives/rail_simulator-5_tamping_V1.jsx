@@ -61,8 +61,8 @@ var RCF_MAX = 0.70;
 // ---- TAMPING CONSTANTS ----
 var TAMP_BASE_MGT = {
   tram:  {r1:8,  r2:12, r3:18, r4:25, r5:35},
-  metro: {r1:14, r2:20, r3:27, r4:38, r5:48},
-  heavy: {r1:15, r2:22, r3:30, r4:40, r5:65},
+  metro: {r1:10, r2:16, r3:22, r4:30, r5:40},
+  heavy: {r1:15, r2:22, r3:30, r4:40, r5:55},
 };
 var TAMP_PLATFORM = {P1:1.20, P2:1.00, P3:0.70, P4:0.45};
 var TAMP_V_REF = 80;
@@ -1678,14 +1678,12 @@ function BallastPanel(props) {
   var appoint     = props.appoint || TAMP_APPOINT_DEFAULT;
   var degCycles   = props.degCycles || 6;
   var ballastDens = props.ballastDens || 1.7;
-  var aidx        = props.aidx != null ? props.aidx : -1;
-  var onSegSelect = props.onSegSelect || function(){};
   var cl2 = cl;
   var ctx = context==="tram"?"tram":context==="heavy"?"heavy":"metro";
   var fp  = TAMP_PLATFORM[platform] || 1.0;
   var BAND_LABELS = {r1:"R<100m",r2:"100-200m",r3:"200-400m",r4:"400-800m",r5:"R>=800m"};
 
-  var rows = segs.filter(function(s){ return (s.active || s.isSpecialZone || s.lengthKm > 0) && s.lengthKm > 0; }).map(function(seg, si) {
+  var rows = segs.filter(function(s){ return s.active && s.lengthKm > 0; }).map(function(seg, si) {
     var band      = TAMP_BAND(seg.repr || 300);
     var baseInt   = (TAMP_BASE_MGT[ctx] || TAMP_BASE_MGT.metro)[band] || 25;
     var segSpeed  = seg.speed || globalSpeed;
@@ -1803,7 +1801,7 @@ function BallastPanel(props) {
             <tbody>
               {rows.map(function(r,i){
                 return (
-                  <tr key={r.seg.id} onClick={function(){onSegSelect(i);}} style={{cursor:"pointer",borderTop:"1px solid rgba(255,255,255,0.05)",background:aidx===i?"rgba(125,211,200,0.08)":i%2===0?"rgba(255,255,255,0.01)":"transparent"}}>
+                  <tr key={r.seg.id} style={{borderTop:"1px solid rgba(255,255,255,0.05)",background:i%2===0?"rgba(255,255,255,0.01)":"transparent"}}>
                     <td style={{padding:"8px 10px",color:"#e8f4f3",fontWeight:500}}>{r.seg.label}</td>
                     <td style={{padding:"8px 10px",fontFamily:"monospace",color:cl2.teal}}>{r.band.toUpperCase()}</td>
                     <td style={{padding:"8px 10px",fontFamily:"monospace"}}>{r.segSpeed} km/h</td>
@@ -1831,13 +1829,13 @@ function BallastPanel(props) {
         </div>
       </Card>
 
-      <Card title={"Tamping Schedule -- "+horizon+"-Year Horizon"+(aidx>=0&&rows[aidx]?" -- "+rows[aidx].seg.label:"")}>
+      <Card title={"Tamping Schedule -- "+horizon+"-Year Horizon"}>
         <div style={{fontSize:11,color:cl2.dim,marginBottom:8,display:"flex",gap:20}}>
           <span><span style={{display:"inline-block",width:10,height:10,background:cl2.teal,borderRadius:2,marginRight:4}}/>Tamping</span>
           <span><span style={{display:"inline-block",width:10,height:10,background:cl2.warn,borderRadius:2,marginRight:4}}/>Degarnissage</span>
         </div>
         <ResponsiveContainer width="100%" height={Math.max(140,rows.length*44+60)}>
-          <BarChart data={chartData} barSize={aidx>=0?18:8}>
+          <BarChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)"/>
             <XAxis dataKey="year" stroke="#4a6a74" tick={{fontSize:10}}/>
             <YAxis stroke="#4a6a74" tick={{fontSize:10}} tickFormatter={function(){return "";}} width={8}/>
@@ -1855,10 +1853,10 @@ function BallastPanel(props) {
                 })}
               </div>;
             }}/>
-            {rows.filter(function(r,i){ return aidx<0||aidx===i; }).map(function(r){
+            {rows.map(function(r){
               return [
-                <Bar key={"t_"+r.seg.id} dataKey={"t_"+r.seg.id} stackId={r.seg.id} fill={cl2.teal} opacity={0.9} radius={[2,2,0,0]}/>,
-                <Bar key={"d_"+r.seg.id} dataKey={"d_"+r.seg.id} stackId={r.seg.id} fill={cl2.warn} opacity={0.95} radius={[2,2,0,0]}/>,
+                <Bar key={"t_"+r.seg.id} dataKey={"t_"+r.seg.id} stackId={r.seg.id} fill={cl2.teal} opacity={0.8} radius={[2,2,0,0]}/>,
+                <Bar key={"d_"+r.seg.id} dataKey={"d_"+r.seg.id} stackId={r.seg.id} fill={cl2.warn} opacity={0.9} radius={[2,2,0,0]}/>,
               ];
             })}
           </BarChart>
@@ -4410,7 +4408,7 @@ export default function App() {
                       setGCMK(p.cMobilKm  !== undefined ? p.cMobilKm  : null);
                     }}/>}
                     {ctab==="repr"&&<ReprofilingCostPanel simResult={result} horizon={horizon} context={context} initMachine={grindMachine} initRegion={grindRegion} initCurrency={sharedCurrency} onCurrencyChange={setSharedCur} ratesStatus={ratesStatus} onShowRates={function(){setShowRatesPop(true);}} currencyMap={currencyMap} currencyOptions={currencyOptions} reprActive={reprActive}/>}
-                     {ctab==="tamp"&&trackMode==="ballast"&&result&&<BallastPanel segs={result.results.map(function(r){return r.seg;})} result={result} horizon={horizon} context={context} globalSpeed={speed} platform={tPlatform} onPlatformChange={setTPlatform} appoint={tAppoint} onAppointChange={setTAppoint} degCycles={tDegCycles} onDegCyclesChange={setTDegCycles} ballastDens={tBallastDens} onBallastDensChange={setTBallastDens} aidx={aidx} onSegSelect={setAi}/>}
+                     {ctab==="tamp"&&trackMode==="ballast"&&result&&<BallastPanel segs={segs} result={result} horizon={horizon} context={context} globalSpeed={speed} platform={tPlatform} onPlatformChange={setTPlatform} appoint={tAppoint} onAppointChange={setTAppoint} degCycles={tDegCycles} onDegCyclesChange={setTDegCycles} ballastDens={tBallastDens} onBallastDensChange={setTBallastDens}/>}
                     {ctab==="tamp"&&trackMode==="ballast"&&!result&&<div style={{padding:40,textAlign:"center",color:"#6b9ea8",fontSize:13}}>Run the simulation first to see the tamping schedule.</div>}
                     {ctab==="tamp"&&trackMode!=="ballast"&&<div style={{padding:40,textAlign:"center",color:"#fbbf24",fontSize:13}}>Ballast Tamping is only available for ballast track.</div>}
                     {ctab==="cmp"&&<ComparePanel simResult={result} horizon={horizon} context={context} params={{context:context,trains:trains,segments:segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){var b=Object.assign({},s,{radius:s.repr,railGrade:s.grade});if(isBF&&initCond[s.id]){var ic=initCond[s.id];b.initWearV=ic.wearV||0;b.initWearL=ic.wearL||0;b.initRCF=ic.rcf||0;b.initMGT=ic.mgt||0;}return b;}).concat(specialZones.filter(function(z){return z.lengthM>0;}).map(function(z){return {id:z.id,label:z.name,radius:z.radius||9000,railGrade:z.grade||"R260",lengthKm:z.lengthM/1000,fVExtra:z.fVExtra,corrugationMGT:z.corrugation?z.corrMGT:null,isSpecialZone:true,zoneType:z.type};})),strategy:strategy,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon,customLimV:customLimActive?customLimV:null,customLimL:customLimActive?customLimL:null,customResActive:customResActive,customMinRes:customMinRes}} grindEurPerMl={liveGrindRate} replEurPerMl={liveReplRate} grindCostParams={liveGrindCost} calcReplRate={calcReplRateForGrade} currency={sharedCurrency} currencyMap={currencyMap} reprActive={reprActive} reprThresh={reprThresh} reprRemL={reprRemL} reprRemV={reprRemV} reprRcfR={reprRcfR} reprSkip={reprSkip} reprRadiusBased={reprRadiusBased} reprRemLByBand={reprRemLByBand} liveReprRate={liveReprRate} liveReprMobil={liveReprMobil}/>}

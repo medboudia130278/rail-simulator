@@ -61,8 +61,8 @@ var RCF_MAX = 0.70;
 // ---- TAMPING CONSTANTS ----
 var TAMP_BASE_MGT = {
   tram:  {r1:8,  r2:12, r3:18, r4:25, r5:35},
-  metro: {r1:14, r2:20, r3:27, r4:38, r5:48},
-  heavy: {r1:15, r2:22, r3:30, r4:40, r5:65},
+  metro: {r1:10, r2:16, r3:22, r4:30, r5:40},
+  heavy: {r1:15, r2:22, r3:30, r4:40, r5:55},
 };
 var TAMP_PLATFORM = {P1:1.20, P2:1.00, P3:0.70, P4:0.45};
 var TAMP_V_REF = 80;
@@ -1831,13 +1831,13 @@ function BallastPanel(props) {
         </div>
       </Card>
 
-      <Card title={"Tamping Schedule -- "+horizon+"-Year Horizon"+(aidx>=0&&rows[aidx]?" -- "+rows[aidx].seg.label:"")}>
+      <Card title={"Tamping Schedule -- "+horizon+"-Year Horizon"}>
         <div style={{fontSize:11,color:cl2.dim,marginBottom:8,display:"flex",gap:20}}>
           <span><span style={{display:"inline-block",width:10,height:10,background:cl2.teal,borderRadius:2,marginRight:4}}/>Tamping</span>
           <span><span style={{display:"inline-block",width:10,height:10,background:cl2.warn,borderRadius:2,marginRight:4}}/>Degarnissage</span>
         </div>
         <ResponsiveContainer width="100%" height={Math.max(140,rows.length*44+60)}>
-          <BarChart data={chartData} barSize={aidx>=0?18:8}>
+          <BarChart data={chartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)"/>
             <XAxis dataKey="year" stroke="#4a6a74" tick={{fontSize:10}}/>
             <YAxis stroke="#4a6a74" tick={{fontSize:10}} tickFormatter={function(){return "";}} width={8}/>
@@ -1855,10 +1855,10 @@ function BallastPanel(props) {
                 })}
               </div>;
             }}/>
-            {rows.filter(function(r,i){ return aidx<0||aidx===i; }).map(function(r){
+            {rows.map(function(r){
               return [
-                <Bar key={"t_"+r.seg.id} dataKey={"t_"+r.seg.id} stackId={r.seg.id} fill={cl2.teal} opacity={0.9} radius={[2,2,0,0]}/>,
-                <Bar key={"d_"+r.seg.id} dataKey={"d_"+r.seg.id} stackId={r.seg.id} fill={cl2.warn} opacity={0.95} radius={[2,2,0,0]}/>,
+                <Bar key={"t_"+r.seg.id} dataKey={"t_"+r.seg.id} stackId={r.seg.id} fill={cl2.teal} opacity={aidx<0||aidx===rows.indexOf(r)?0.9:0.15} radius={[2,2,0,0]}/>,
+                <Bar key={"d_"+r.seg.id} dataKey={"d_"+r.seg.id} stackId={r.seg.id} fill={cl2.warn} opacity={aidx<0||aidx===rows.indexOf(r)?0.95:0.15} radius={[2,2,0,0]}/>,
               ];
             })}
           </BarChart>

@@ -61,8 +61,8 @@ var RCF_MAX = 0.70;
 // ---- TAMPING CONSTANTS ----
 var TAMP_BASE_MGT = {
   tram:  {r1:8,  r2:12, r3:18, r4:25, r5:35},
-  metro: {r1:14, r2:20, r3:27, r4:38, r5:48},
-  heavy: {r1:15, r2:22, r3:30, r4:40, r5:65},
+  metro: {r1:10, r2:16, r3:22, r4:30, r5:40},
+  heavy: {r1:15, r2:22, r3:30, r4:40, r5:55},
 };
 var TAMP_PLATFORM = {P1:1.20, P2:1.00, P3:0.70, P4:0.45};
 var TAMP_V_REF = 80;
