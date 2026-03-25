@@ -117,7 +117,6 @@ var RESERVE_L = { R200:7,   R260:8,   R320Cr:9,   R350HT:9,   R400HT:10  }; // l
 var MIN_RES_V = { R200:3.0, R260:3.0, R320Cr:3.0, R350HT:3.5, R400HT:4.0 }; // min vertical reserve before replacement
 var MIN_RES_L = { R200:3.0, R260:3.0, R320Cr:3.5, R350HT:3.5, R400HT:4.0 }; // min lateral reserve before replacement
 var RCF_MAX = 0.70;
-var HEAVY_RCF_GRIND_TRIGGER = { r1:0.45, r2:0.32, r3:0.30, r4:0.32, r5:0.38 };
 
 // ---- TAMPING CONSTANTS ----
 var TAMP_BASE_MGT = {
@@ -395,9 +394,7 @@ function runSim(params) {
         reprCnt++; reprFlag=true; reprofiled=true;
       }
       var ground=false;
-      var grindByMGT = mgtSG>=gMGT;
-      var grindByRCF = params.context==="heavy" && rcf>=(HEAVY_RCF_GRIND_TRIGGER[rb.id]||RCF_MAX);
-      if((grindByMGT||grindByRCF)&&rcf<RCF_MAX&&res>minResV+0.5){
+      if(mgtSG>=gMGT&&rcf<RCF_MAX&&res>minResV+0.5){
         if(reprFlag&&reprSkip){mgtSG=0;reprFlag=false;}
         else{
           var passes=params.strategy==="corrective"?Math.max(1,Math.min(4,Math.ceil(rcf/0.12))):1;
