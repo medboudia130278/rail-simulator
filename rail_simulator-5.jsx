@@ -40,17 +40,70 @@ var SPECIAL_ZONE_TYPES = {
 };
 function getSpecialZoneDefaultSpeed(type, lineSpeed) {
   var vLine = Math.max(20, +(lineSpeed||80));
-  if(type==="terminus") return 25;
-  if(type==="braking" || type==="accel") return 50;
+  if(type==="terminus") return Math.min(vLine, 25);
+  if(type==="braking" || type==="accel") return Math.min(vLine, 50);
   if(type==="transition") return vLine;
   return vLine;
 }
+var CURVE_SPEED_DEFAULTS = {
+  tram:  { r1:25, r2:35, r3:50, r4:70, r5:80 },
+  metro: { r1:35, r2:50, r3:65, r4:80, r5:100 },
+  heavy: { r1:40, r2:60, r3:80, r4:100, r5:140 },
+};
+function getRecommendedSegmentSpeed(seg, context, lineSpeed) {
+  var vLine = Math.max(20, +(lineSpeed||80));
+  if(seg && seg.speed) return Math.max(20, +seg.speed);
+  if(seg && seg.isSpecialZone) return getSpecialZoneDefaultSpeed(seg.zoneType, vLine);
+  var radius = (seg && (seg.radius || seg.repr)) || 9000;
+  var band = TAMP_BAND(radius);
+  var ctxDefaults = CURVE_SPEED_DEFAULTS[context] || CURVE_SPEED_DEFAULTS.metro;
+  return Math.min(vLine, ctxDefaults[band] || vLine);
+}
 
-var SPEED_BANDS = [
-  {max:40,  f_v:0.90,f_l:1.10},{max:80, f_v:1.00,f_l:1.00},
-  {max:120, f_v:1.10,f_l:0.95},{max:160,f_v:1.20,f_l:0.90},
-  {max:9999,f_v:1.35,f_l:0.85},
+var SPEED_BANDS_V = [
+  {max:40,   f_v:0.92},
+  {max:80,   f_v:1.00},
+  {max:120,  f_v:1.08},
+  {max:160,  f_v:1.15},
+  {max:9999, f_v:1.25},
 ];
+var SPEED_BANDS_L = {
+  r1: [
+    {max:40,   f_l:1.05},
+    {max:80,   f_l:1.00},
+    {max:120,  f_l:0.98},
+    {max:160,  f_l:0.96},
+    {max:9999, f_l:0.94},
+  ],
+  r2: [
+    {max:40,   f_l:1.03},
+    {max:80,   f_l:1.00},
+    {max:120,  f_l:0.98},
+    {max:160,  f_l:0.97},
+    {max:9999, f_l:0.95},
+  ],
+  r3: [
+    {max:40,   f_l:1.01},
+    {max:80,   f_l:1.00},
+    {max:120,  f_l:0.99},
+    {max:160,  f_l:0.98},
+    {max:9999, f_l:0.97},
+  ],
+  r4: [
+    {max:40,   f_l:1.00},
+    {max:80,   f_l:1.00},
+    {max:120,  f_l:0.99},
+    {max:160,  f_l:0.98},
+    {max:9999, f_l:0.98},
+  ],
+  r5: [
+    {max:40,   f_l:1.00},
+    {max:80,   f_l:1.00},
+    {max:120,  f_l:1.00},
+    {max:160,  f_l:0.99},
+    {max:9999, f_l:0.99},
+  ],
+};
 var LUBRICATION = {
   none:    {label:"No lubrication",                f:[1.00,1.00,1.00,1.00,1.00]},
   poor:    {label:"Poor (badly maintained)",       f:[0.80,0.82,0.88,0.95,1.00]},
@@ -279,7 +332,6 @@ function calcEqMGT(trains,ctx) {
 }
 function runSim(params) {
   var ctx=CONTEXTS[params.context], rt=RAIL_TYPES[params.railType], tm=TRACK_MODES[params.trackMode];
-  var sf=SPEED_BANDS.find(function(s){return params.speed<=s.max;})||SPEED_BANDS[4];
   var lubKey=params.lubrication||"none", mgtPY=calcMGT(params.trains), eqPY=calcEqMGT(params.trains,params.context);
   var limits=LIMITS[params.context];
   if(params.customLimV!==null && params.customLimV!==undefined) limits=Object.assign({},limits,{v:params.customLimV});
@@ -296,11 +348,16 @@ function runSim(params) {
   var results=params.segments.map(function(seg){
     var rb=BANDS.find(function(b){return seg.radius>=b.rMin&&seg.radius<b.rMax;})||BANDS[4];
     var ri=BANDS.indexOf(rb), grade=RAIL_GRADES[seg.railGrade]||RAIL_GRADES["R260"];
+    var segSpeed = getRecommendedSegmentSpeed(seg, params.context, params.speed);
+    var sfV=(SPEED_BANDS_V.find(function(s){return segSpeed<=s.max;})||SPEED_BANDS_V[SPEED_BANDS_V.length-1]).f_v;
+    var speedBandId = TAMP_BAND(seg.radius || seg.repr || 9000);
+    var speedLatTable = SPEED_BANDS_L[speedBandId] || SPEED_BANDS_L.r5;
+    var sfL=(speedLatTable.find(function(s){return segSpeed<=s.max;})||speedLatTable[speedLatTable.length-1]).f_l;
     var lubF=(LUBRICATION[lubKey]||LUBRICATION.none).f[ri];
     var he=Math.min(1.0-(1.0-grade.f_wear)/(1.0+rb.f_l*0.3),1.0);
-    var wrV=ctx.baseWearV*rb.f_v*he*rt.f_v*tm.f_v*sf.f_v;
-    var wrL=ctx.baseWearL*1.5*rb.f_l*he*rt.f_l*tm.f_l*sf.f_l*lubF;
-    var rcfBase=ctx.rcfRate[ri]*grade.f_rcf*sf.f_v;
+    var wrV=ctx.baseWearV*rb.f_v*he*rt.f_v*tm.f_v*sfV;
+    var wrL=ctx.baseWearL*1.5*rb.f_l*he*rt.f_l*tm.f_l*sfL*lubF;
+    var rcfBase=ctx.rcfRate[ri]*grade.f_rcf*sfV;
 
     // Special zone: apply extra wear factor on vertical only
     var fVExtra = seg.fVExtra || 1.0;
@@ -351,7 +408,7 @@ function runSim(params) {
       data.push({year:y,mgt:+totMGT.toFixed(2),wearV:+Math.min(wV,limits.v).toFixed(3),wearL:+Math.min(wL,limits.l).toFixed(3),rcf:+Math.min(rcf,1).toFixed(3),res:+Math.max(0,res).toFixed(2),resL:+Math.max(0,resL).toFixed(2),ground:ground?1:0,reprofiled:(reprofiled&&!repl)?1:0,repl:repl?1:0});
       if(repl&&!repY){repY=y;break;}
     }
-    return {seg:seg,rb:rb,wrV:wrV,wrL:wrL,he:he,mgtPY:mgtPY,eqPY:eqPY,gCount:gCnt,reprCount:reprCnt,repY:repY,data:data,limits:limits,resL:+resL.toFixed(2)};
+    return {seg:seg,rb:rb,wrV:wrV,wrL:wrL,he:he,segSpeed:segSpeed,mgtPY:mgtPY,eqPY:eqPY,gCount:gCnt,reprCount:reprCnt,repY:repY,data:data,limits:limits,resL:+resL.toFixed(2)};
   });
   return {results:results,mgtPY:mgtPY,eqPY:eqPY};
 }
@@ -4743,7 +4800,7 @@ export default function App() {
                       <div><Lbl>Length (km)</Lbl><Inp value={seg.lengthKm} onChange={function(v){updSeg(seg.id,"lengthKm",v);}} min={0.1} step={0.1}/></div>
                       <div><Lbl>Representative radius (m)</Lbl><Inp value={seg.repr} onChange={function(v){updSeg(seg.id,"repr",Math.max(rb?rb.rMin:1,Math.min((rb?rb.rMax:99999)-1,v)));}} min={rb?rb.rMin:1} max={rb?(rb.rMax-1):99998}/><div style={{fontSize:10,color:cl.dim,marginTop:2}}>{seg.repr>=9000?"tangent":"R = "+seg.repr+" m"}</div></div>
                       <div><Lbl>Grade / Hardness</Lbl><Sel value={seg.grade} onChange={function(v){updSeg(seg.id,"grade",v);}} opts={Object.keys(RAIL_GRADES).map(function(k){return {v:k,l:k};})}/></div>
-                       {trackMode==="ballast"&&<div><Lbl>Speed (km/h)</Lbl><Inp value={seg.speed||speed} onChange={function(v){updSeg(seg.id,"speed",+v);}} min={20} max={320}/></div>}
+                      <div><Lbl>Speed (km/h)</Lbl><Inp value={seg.speed||getRecommendedSegmentSpeed(seg, context, speed)} onChange={function(v){updSeg(seg.id,"speed",+v);}} min={20} max={320}/></div>
                     </div>
                   )}
                 </div>
@@ -4819,7 +4876,7 @@ export default function App() {
                     </div>
                     <button onClick={function(){setSpZ(function(a){return a.filter(function(x){return x.id!==z.id;});});}} style={{background:"none",border:"none",color:cl.warn,cursor:"pointer",fontSize:16}}>x</button>
                   </div>
-                  <div style={{display:"grid",gridTemplateColumns:trackMode==="ballast"?"1fr 1fr 1fr":"1fr 1fr",gap:8,marginBottom:8}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
                     <div>
                       <Lbl>Zone type</Lbl>
                       <Sel value={z.type} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{type:v,fVExtra:SPECIAL_ZONE_TYPES[v].fVExtra,corrMGT:SPECIAL_ZONE_TYPES[v].corrMGT,speed:getSpecialZoneDefaultSpeed(v, speed)}):x;});});}} opts={Object.keys(SPECIAL_ZONE_TYPES).map(function(k){return {v:k,l:SPECIAL_ZONE_TYPES[k].label};})}/>
@@ -4828,10 +4885,10 @@ export default function App() {
                       <Lbl>Rail grade</Lbl>
                       <Sel value={z.grade} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{grade:v}):x;});});}} opts={Object.keys(RAIL_GRADES).map(function(k){return {v:k,l:k};})}/>
                     </div>
-                    {trackMode==="ballast"&&<div>
+                    <div>
                       <Lbl>Speed (km/h)</Lbl>
                       <Inp value={z.speed||getSpecialZoneDefaultSpeed(z.type, speed)} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{speed:+v}):x;});});}} min={20} max={320}/>
-                    </div>}
+                    </div>
                     <div>
                       <Lbl>Zone length (m)</Lbl>
                       <Inp value={z.lengthM} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{lengthM:v}):x;});});}} min={10} max={500} step={10}/>
