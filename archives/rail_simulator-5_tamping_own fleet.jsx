@@ -1997,20 +1997,20 @@ function TampingCostPanel(props) {
   var currency    = props.currency || "EUR";
   var cl2 = cl;
 
-  const [machineKey, setMachine] = useState(props.initMachine || "standard");
-  const [mode,       setMode]    = useState(props.initMode || "sub");
-  const [region,     setRegion]  = useState(props.initRegion || "WEU");
-  const [nightHrs,   setNight]   = useState(props.initNight || 6);
-  const [ballastPxOv,setBallPx]  = useState(props.initBallastPxOv !== undefined ? props.initBallastPxOv : null);
-  const [cOpPerMl,   setCOp]     = useState(props.initCOpPerMl !== undefined ? props.initCOpPerMl : null);
-  const [cMobilFix,  setCMF]     = useState(props.initCMobilFix !== undefined ? props.initCMobilFix : null);
-  const [cDegarnMl,  setCDeg]    = useState(props.initCDegarnMl !== undefined ? props.initCDegarnMl : null);
-  const [ownManual,  setOwnManual] = useState(!!props.initOwnManual);
-  const [ownFuelLph, setOwnFuelLph] = useState(props.initOwnFuelLph !== undefined ? props.initOwnFuelLph : null);
-  const [ownGasoil,  setOwnGasoil]  = useState(props.initOwnGasoil !== undefined ? props.initOwnGasoil : null);
-  const [ownMaintH,  setOwnMaintH]  = useState(props.initOwnMaintH !== undefined ? props.initOwnMaintH : null);
-  const [ownLabourH, setOwnLabourH] = useState(props.initOwnLabourH !== undefined ? props.initOwnLabourH : null);
-  const [ownProdMlH, setOwnProdMlH] = useState(props.initOwnProdMlH !== undefined ? props.initOwnProdMlH : null);
+  const [machineKey, setMachine] = useState("standard");
+  const [mode,       setMode]    = useState("sub");
+  const [region,     setRegion]  = useState("WEU");
+  const [nightHrs,   setNight]   = useState(6);
+  const [ballastPxOv,setBallPx]  = useState(null);
+  const [cOpPerMl,   setCOp]     = useState(null);
+  const [cMobilFix,  setCMF]     = useState(null);
+  const [cDegarnMl,  setCDeg]    = useState(null);
+  const [ownManual,  setOwnManual] = useState(false);
+  const [ownFuelLph, setOwnFuelLph] = useState(null);
+  const [ownGasoil,  setOwnGasoil]  = useState(null);
+  const [ownMaintH,  setOwnMaintH]  = useState(null);
+  const [ownLabourH, setOwnLabourH] = useState(null);
+  const [ownProdMlH, setOwnProdMlH] = useState(null);
 
   var sym = (currencyMap[currency]||currencyMap.EUR||CURRENCIES.EUR).symbol;
   var fx  = (currencyMap[currency]||currencyMap.EUR||CURRENCIES.EUR).rate;
@@ -2088,44 +2088,19 @@ function TampingCostPanel(props) {
   var gTot  = gOp+gMob+gBall+gDeg;
 
   function fmtC(v){ return v>=1e6?(v/1e6).toFixed(2)+"M "+sym:v>=1e3?(v/1e3).toFixed(1)+"k "+sym:v.toFixed(0)+" "+sym; }
-  function notifyParent(overrides){
-    if(!props.onParamsChange) return;
-    props.onParamsChange(Object.assign({
-      machineKey:machineKey,
-      mode:mode,
-      region:region,
-      nightHrs:nightHrs,
-      ballastPxOv:ballastPxOv,
-      cOpPerMl:cOpPerMl,
-      cMobilFix:cMobilFix,
-      cDegarnMl:cDegarnMl,
-      ownManual:ownManual,
-      ownFuelLph:ownFuelLph,
-      ownGasoil:ownGasoil,
-      ownMaintH:ownMaintH,
-      ownLabourH:ownLabourH,
-      ownProdMlH:ownProdMlH,
-    }, overrides||{}));
-  }
-  function resetOp(){ setCOp(null); setCMF(null); notifyParent({cOpPerMl:null,cMobilFix:null}); }
-  function resetDeg(){ setCDeg(null); notifyParent({cDegarnMl:null}); }
-  function resetBall(){ setBallPx(null); notifyParent({ballastPxOv:null}); }
+  function resetOp(){ setCOp(null); setCMF(null); }
+  function resetDeg(){ setCDeg(null); }
+  function resetBall(){ setBallPx(null); }
   function initOwnManual(nextMachineKey, nextRegion) {
     var mk = nextMachineKey || machineKey;
     var rg = nextRegion || region;
     var m = TAMP_MACHINES_BOUR[mk] || TAMP_MACHINES_BOUR.standard;
     if(!m || !m.ownedRates) return;
-    var nextFuel = m.ownedRates.fuelLph;
-    var nextGasoil = TAMP_DIESEL_EUR_L[rg] || TAMP_DIESEL_EUR_L.WEU;
-    var nextMaint = m.ownedRates.maintEurH;
-    var nextLab = (m.ownedRates.labour[rg]||m.ownedRates.labour.WEU) * m.ownedRates.team;
-    var nextProd = m.prodMlH;
-    setOwnFuelLph(nextFuel);
-    setOwnGasoil(nextGasoil);
-    setOwnMaintH(nextMaint);
-    setOwnLabourH(nextLab);
-    setOwnProdMlH(nextProd);
-    notifyParent({ownFuelLph:nextFuel,ownGasoil:nextGasoil,ownMaintH:nextMaint,ownLabourH:nextLab,ownProdMlH:nextProd});
+    setOwnFuelLph(m.ownedRates.fuelLph);
+    setOwnGasoil(TAMP_DIESEL_EUR_L[rg] || TAMP_DIESEL_EUR_L.WEU);
+    setOwnMaintH(m.ownedRates.maintEurH);
+    setOwnLabourH((m.ownedRates.labour[rg]||m.ownedRates.labour.WEU) * m.ownedRates.team);
+    setOwnProdMlH(m.prodMlH);
   }
   function resetOwnManual() {
     setOwnFuelLph(null);
@@ -2133,11 +2108,7 @@ function TampingCostPanel(props) {
     setOwnMaintH(null);
     setOwnLabourH(null);
     setOwnProdMlH(null);
-    notifyParent({ownFuelLph:null,ownGasoil:null,ownMaintH:null,ownLabourH:null,ownProdMlH:null});
   }
-  useEffect(function(){
-    notifyParent();
-  }, [machineKey, mode, region, nightHrs, ballastPxOv, cOpPerMl, cMobilFix, cDegarnMl, ownManual, ownFuelLph, ownGasoil, ownMaintH, ownLabourH, ownProdMlH]);
 
   return (
     <div style={{display:"grid",gap:16}}>
@@ -2163,11 +2134,9 @@ function TampingCostPanel(props) {
               {["sub","owned"].map(function(m){
                 return <div key={m} onClick={function(){
                   setMode(m);
-                  notifyParent({mode:m});
                   if(m==="sub") {
                     setOwnManual(false);
                     resetOwnManual();
-                    notifyParent({ownManual:false});
                   } else if(m==="owned" && !ownManual) {
                     initOwnManual();
                   }
@@ -2184,18 +2153,18 @@ function TampingCostPanel(props) {
           </div>
           <div>
             <Lbl>{mode==="owned"?"Machine":"Machine type"}</Lbl>
-            <Sel value={machineKey} onChange={function(v){setMachine(v); notifyParent({machineKey:v}); resetOp(); if(mode==="owned" && !ownManual){initOwnManual(v, region);}}}
+            <Sel value={machineKey} onChange={function(v){setMachine(v); resetOp(); if(mode==="owned" && !ownManual){initOwnManual(v, region);}}}
               opts={Object.keys(TAMP_MACHINES_BOUR).map(function(k){return {v:k,l:TAMP_MACHINES_BOUR[k].label};})}/>
             <div style={{fontSize:10,color:cl2.dim,marginTop:3}}>{(mode==="owned" && tcp.prodMlH ? tcp.prodMlH : machine.prodMlH)} m/h productivity</div>
           </div>
           <div>
             <Lbl>Region</Lbl>
-            <Sel value={region} onChange={function(v){setRegion(v); notifyParent({region:v}); resetOp(); resetDeg(); resetBall(); if(mode==="owned" && !ownManual){initOwnManual(machineKey, v);}}}
+            <Sel value={region} onChange={function(v){setRegion(v); resetOp(); resetDeg(); resetBall(); if(mode==="owned" && !ownManual){initOwnManual(machineKey, v);}}}
               opts={["WEU","EEU","MENA","SSA","SEA","LATAM"].map(function(r){return {v:r,l:r};})}/>
           </div>
           <div>
             <Lbl>Night hours / intervention</Lbl>
-            <Inp value={nightHrs} onChange={function(v){setNight(v); notifyParent({nightHrs:v});}} min={2} max={10} step={0.5}/>
+            <Inp value={nightHrs} onChange={setNight} min={2} max={10} step={0.5}/>
             <div style={{fontSize:10,color:cl2.dim,marginTop:3}}>{tcp.mlPerNight.toFixed(0)} m/night capacity</div>
           </div>
         </div>
@@ -2204,14 +2173,14 @@ function TampingCostPanel(props) {
             <div>
               <Lbl>Op rate (EUR/ml){cOpPerMl!==null&&<span style={{color:cl2.amber,marginLeft:4}}>CUSTOM</span>}</Lbl>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                <Inp value={cOpPerMl!==null?cOpPerMl:+(tcp.perMl/fx).toFixed(2)} onChange={function(v){setCOp(+v); notifyParent({cOpPerMl:+v});}} min={0.5} max={50} step={0.5}/>
+                <Inp value={cOpPerMl!==null?cOpPerMl:+(tcp.perMl/fx).toFixed(2)} onChange={function(v){setCOp(+v);}} min={0.5} max={50} step={0.5}/>
                 {cOpPerMl!==null&&<div onClick={function(){setCOp(null);}} style={{fontSize:10,color:cl2.dim,cursor:"pointer",whiteSpace:"nowrap"}}>Reset</div>}
               </div>
             </div>
             <div>
               <Lbl>Mobilisation (EUR/intervention){cMobilFix!==null&&<span style={{color:cl2.amber,marginLeft:4}}>CUSTOM</span>}</Lbl>
               <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                <Inp value={cMobilFix!==null?cMobilFix:+(tcp.mobilFix/fx).toFixed(0)} onChange={function(v){setCMF(+v); notifyParent({cMobilFix:+v});}} min={0} max={50000} step={500}/>
+                <Inp value={cMobilFix!==null?cMobilFix:+(tcp.mobilFix/fx).toFixed(0)} onChange={function(v){setCMF(+v);}} min={0} max={50000} step={500}/>
                 {cMobilFix!==null&&<div onClick={function(){setCMF(null);}} style={{fontSize:10,color:cl2.dim,cursor:"pointer",whiteSpace:"nowrap"}}>Reset</div>}
               </div>
             </div>
@@ -2225,7 +2194,6 @@ function TampingCostPanel(props) {
                   var next=!v;
                   if(next) initOwnManual();
                   if(!next) resetOwnManual();
-                  notifyParent({ownManual:next});
                   return next;
                 });
               }} style={{width:28,height:16,borderRadius:8,background:ownManual?cl2.teal:"rgba(255,255,255,0.1)",position:"relative",cursor:"pointer",border:"1px solid "+(ownManual?"rgba(125,211,200,0.4)":"rgba(255,255,255,0.15)")}}>
@@ -2255,11 +2223,11 @@ function TampingCostPanel(props) {
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                 <div>
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                    <div><Lbl>Fuel consumption</Lbl><Inp value={ownFuelLph!==null?ownFuelLph:ownPreset.fuelLph} onChange={function(v){setOwnFuelLph(+v); notifyParent({ownFuelLph:+v});}} min={1} max={200} step={1}/><div style={{fontSize:10,color:cl2.dim,marginTop:3}}>L/h</div></div>
-                    <div><Lbl>Gasoil price</Lbl><Inp value={ownGasoil!==null?ownGasoil:ownPreset.gasoilEurL} onChange={function(v){setOwnGasoil(+v); notifyParent({ownGasoil:+v});}} min={0.2} max={5} step={0.05}/><div style={{fontSize:10,color:cl2.dim,marginTop:3}}>EUR/L</div></div>
-                    <div><Lbl>Maintenance</Lbl><Inp value={ownMaintH!==null?ownMaintH:ownPreset.maintEurH} onChange={function(v){setOwnMaintH(+v); notifyParent({ownMaintH:+v});}} min={10} max={1000} step={5}/><div style={{fontSize:10,color:cl2.dim,marginTop:3}}>EUR/h</div></div>
-                    <div><Lbl>Labour team rate</Lbl><Inp value={ownLabourH!==null?ownLabourH:ownPreset.labourTeamEurH} onChange={function(v){setOwnLabourH(+v); notifyParent({ownLabourH:+v});}} min={10} max={1000} step={5}/><div style={{fontSize:10,color:cl2.dim,marginTop:3}}>EUR/h team included</div></div>
-                    <div><Lbl>Productivity</Lbl><Inp value={ownProdMlH!==null?ownProdMlH:ownPreset.prodMlH} onChange={function(v){setOwnProdMlH(+v); notifyParent({ownProdMlH:+v});}} min={20} max={1000} step={5}/><div style={{fontSize:10,color:cl2.dim,marginTop:3}}>m/h</div></div>
+                    <div><Lbl>Fuel consumption</Lbl><Inp value={ownFuelLph!==null?ownFuelLph:ownPreset.fuelLph} onChange={function(v){setOwnFuelLph(+v);}} min={1} max={200} step={1}/><div style={{fontSize:10,color:cl2.dim,marginTop:3}}>L/h</div></div>
+                    <div><Lbl>Gasoil price</Lbl><Inp value={ownGasoil!==null?ownGasoil:ownPreset.gasoilEurL} onChange={function(v){setOwnGasoil(+v);}} min={0.2} max={5} step={0.05}/><div style={{fontSize:10,color:cl2.dim,marginTop:3}}>EUR/L</div></div>
+                    <div><Lbl>Maintenance</Lbl><Inp value={ownMaintH!==null?ownMaintH:ownPreset.maintEurH} onChange={function(v){setOwnMaintH(+v);}} min={10} max={1000} step={5}/><div style={{fontSize:10,color:cl2.dim,marginTop:3}}>EUR/h</div></div>
+                    <div><Lbl>Labour team rate</Lbl><Inp value={ownLabourH!==null?ownLabourH:ownPreset.labourTeamEurH} onChange={function(v){setOwnLabourH(+v);}} min={10} max={1000} step={5}/><div style={{fontSize:10,color:cl2.dim,marginTop:3}}>EUR/h team included</div></div>
+                    <div><Lbl>Productivity</Lbl><Inp value={ownProdMlH!==null?ownProdMlH:ownPreset.prodMlH} onChange={function(v){setOwnProdMlH(+v);}} min={20} max={1000} step={5}/><div style={{fontSize:10,color:cl2.dim,marginTop:3}}>m/h</div></div>
                   </div>
                 </div>
                 <div style={{background:"rgba(255,255,255,0.02)",borderRadius:8,padding:"10px 12px"}}>
@@ -2284,7 +2252,7 @@ function TampingCostPanel(props) {
           <div>
             <Lbl>Ballast delivered (EUR/t){ballastPxOv!==null&&<span style={{color:cl2.amber,marginLeft:4}}>CUSTOM</span>}</Lbl>
             <div style={{display:"flex",gap:6,alignItems:"center"}}>
-              <Inp value={ballastPxOv!==null?ballastPxOv:+((ballastPreset.carriere+ballastPreset.delivery)).toFixed(1)} onChange={function(v){setBallPx(+v); notifyParent({ballastPxOv:+v});}} min={5} max={120} step={1}/>
+              <Inp value={ballastPxOv!==null?ballastPxOv:+((ballastPreset.carriere+ballastPreset.delivery)).toFixed(1)} onChange={function(v){setBallPx(+v);}} min={5} max={120} step={1}/>
               {ballastPxOv!==null&&<div onClick={resetBall} style={{fontSize:10,color:cl2.dim,cursor:"pointer",whiteSpace:"nowrap"}}>Reset</div>}
             </div>
             <div style={{fontSize:10,color:cl2.dim,marginTop:3}}>Preset: {ballastPreset.carriere} quarry + {ballastPreset.delivery} delivery</div>
@@ -2292,7 +2260,7 @@ function TampingCostPanel(props) {
           <div>
             <Lbl>Degarnissage op rate (EUR/ml){cDegarnMl!==null&&<span style={{color:cl2.amber,marginLeft:4}}>CUSTOM</span>}</Lbl>
             <div style={{display:"flex",gap:6,alignItems:"center"}}>
-              <Inp value={cDegarnMl!==null?cDegarnMl:+(degarnOp.opPerMl).toFixed(1)} onChange={function(v){setCDeg(+v); notifyParent({cDegarnMl:+v});}} min={5} max={150} step={1}/>
+              <Inp value={cDegarnMl!==null?cDegarnMl:+(degarnOp.opPerMl).toFixed(1)} onChange={function(v){setCDeg(+v);}} min={5} max={150} step={1}/>
               {cDegarnMl!==null&&<div onClick={resetDeg} style={{fontSize:10,color:cl2.dim,cursor:"pointer",whiteSpace:"nowrap"}}>Reset</div>}
             </div>
             <div style={{fontSize:10,color:cl2.dim,marginTop:3}}>Operation only -- ballast added separately</div>
@@ -3315,16 +3283,6 @@ export default function App() {
   const [tcMode,       setTCMode]     = useState("sub");
   const [tcRegion,     setTCRegion]   = useState("WEU");
   const [tcNight,      setTCNight]    = useState(6);
-  const [tcBallastPxOv,setTCBallPx]   = useState(null);
-  const [tcCOpPerMl,   setTCCOp]      = useState(null);
-  const [tcCMobilFix,  setTCCMF]      = useState(null);
-  const [tcCDegarnMl,  setTCCDeg]     = useState(null);
-  const [tcOwnManual,  setTCOwnManual]= useState(false);
-  const [tcOwnFuelLph, setTCOwnFuel]  = useState(null);
-  const [tcOwnGasoil,  setTCOwnGasoil]= useState(null);
-  const [tcOwnMaintH,  setTCOwnMaint] = useState(null);
-  const [tcOwnLabourH, setTCOwnLab]   = useState(null);
-  const [tcOwnProdMlH, setTCOwnProd]  = useState(null);
   // Reprofiling model
   const [reprActive,  setReprActive] = useState(false);
   const [reprThresh,  setReprThresh] = useState(60);
@@ -3527,62 +3485,6 @@ export default function App() {
     var c = calcCostPerMl(p, grade||"R260", replWeldType, 6, "EUR", replOvhdPct, false, replJointSp);
     return c.total;
   }
-
-  var tampSummaryById = useMemo(function(){
-    if(trackMode!=="ballast" || !result || !result.results) return {};
-    var fx = (currencyMap[sharedCurrency]||currencyMap.EUR||CURRENCIES.EUR).rate;
-    var machine = TAMP_MACHINES_BOUR[tcMachineKey] || TAMP_MACHINES_BOUR.standard;
-    var ownOverrides = tcMode==="owned" && tcOwnManual ? {
-      fuelLph: tcOwnFuelLph,
-      gasoilEurL: tcOwnGasoil,
-      maintEurH: tcOwnMaintH,
-      labourTeamEurH: tcOwnLabourH,
-      prodMlH: tcOwnProdMlH,
-    } : null;
-    var tcp = calcTampCostPerMl(machine, tcMode, tcRegion, tcNight, currencyMap, sharedCurrency, ownOverrides);
-    var opPerMl = tcCOpPerMl !== null ? tcCOpPerMl * fx : tcp.perMl;
-    var mobilFix = tcCMobilFix !== null ? tcCMobilFix * fx : tcp.mobilFix;
-    var ballastPreset = TAMP_BALLAST_PRICE[tcRegion] || TAMP_BALLAST_PRICE.WEU;
-    var ballastEurT = tcBallastPxOv !== null ? tcBallastPxOv * fx : (ballastPreset.carriere + ballastPreset.delivery) * fx;
-    var degarnOp = TAMP_DEGARN_OP[tcRegion] || TAMP_DEGARN_OP.WEU;
-    var degarnOpMl = tcCDegarnMl !== null ? tcCDegarnMl * fx : degarnOp.opPerMl * fx;
-    var degarnMobFx = degarnOp.mobilFix * fx;
-    var ctx = context==="tram"?"tram":context==="heavy"?"heavy":"metro";
-    var fp = TAMP_PLATFORM[tPlatform] || 1.0;
-    var out = {};
-    result.results.forEach(function(r){
-      var seg = r.seg;
-      var band = TAMP_BAND(seg.repr || seg.radius || 300);
-      var baseInt = (TAMP_BASE_MGT[ctx]||TAMP_BASE_MGT.metro)[band] || 25;
-      var segSpeed = seg.speed || speed;
-      var fSpeed = Math.sqrt(Math.max(20, TAMP_V_REF) / Math.max(20, segSpeed));
-      var tampMGT = baseInt * fp * fSpeed;
-      var mgtPY = r && r.mgtPY ? r.mgtPY : 5;
-      var yrsPerInt = mgtPY > 0 ? tampMGT / mgtPY : tampMGT / 5;
-      var nInterv = Math.max(0, Math.floor(horizon / yrsPerInt));
-      var nDegarn = Math.floor(nInterv / tDegCycles);
-      var nTamp = Math.max(0, nInterv - nDegarn);
-      var lenMl = (seg.lengthKm||0) * 1000;
-      var appKgMl = tAppoint[band] || TAMP_APPOINT_DEFAULT[band] || 20;
-      var appointT = appKgMl * lenMl / 1000;
-      var degarnAppT = appKgMl * TAMP_DEGARN_FACTOR * lenMl / 1000;
-      var cOpCyc = opPerMl * lenMl;
-      var cMobCyc = mobilFix;
-      var cBallCyc = appointT * ballastEurT;
-      var cDegOpCyc = degarnOpMl * lenMl + degarnMobFx;
-      var cDegBalCyc = degarnAppT * ballastEurT;
-      var totalOpC = cOpCyc * nInterv;
-      var totalMobC = cMobCyc * nInterv;
-      var totalBallC = cBallCyc * nInterv;
-      var totalDegC = (cDegOpCyc + cDegBalCyc) * nDegarn;
-      out[seg.id] = {
-        nTamp:nTamp,
-        nDegarn:nDegarn,
-        totalCost: totalOpC + totalMobC + totalBallC + totalDegC,
-      };
-    });
-    return out;
-  }, [trackMode,result,currencyMap,sharedCurrency,tcMachineKey,tcMode,tcRegion,tcNight,tcBallastPxOv,tcCOpPerMl,tcCMobilFix,tcCDegarnMl,tcOwnManual,tcOwnFuelLph,tcOwnGasoil,tcOwnMaintH,tcOwnLabourH,tcOwnProdMlH,context,tPlatform,speed,horizon,tDegCycles,tAppoint]);
 
   var run=useCallback(function(){
     var active=segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){
@@ -4964,7 +4866,7 @@ export default function App() {
                      {ctab==="tamp"&&trackMode==="ballast"&&result&&<BallastPanel segs={result.results.map(function(r){return r.seg;})} result={result} horizon={horizon} context={context} globalSpeed={speed} platform={tPlatform} onPlatformChange={setTPlatform} appoint={tAppoint} onAppointChange={setTAppoint} degCycles={tDegCycles} onDegCyclesChange={setTDegCycles} ballastDens={tBallastDens} onBallastDensChange={setTBallastDens} aidx={aidx} onSegSelect={setAi}/>}
                     {ctab==="tamp"&&trackMode==="ballast"&&!result&&<div style={{padding:40,textAlign:"center",color:"#6b9ea8",fontSize:13}}>Run the simulation first to see the tamping schedule.</div>}
                     {ctab==="tamp"&&trackMode!=="ballast"&&<div style={{padding:40,textAlign:"center",color:"#fbbf24",fontSize:13}}>Ballast Tamping is only available for ballast track.</div>}
-                    {ctab==="tcost"&&trackMode==="ballast"&&result&&<TampingCostPanel segs={result.results.map(function(r){return r.seg;})} result={result} horizon={horizon} context={context} platform={tPlatform} appoint={tAppoint} degCycles={tDegCycles} globalSpeed={speed} currencyMap={currencyMap} currency={sharedCurrency} initMachine={tcMachineKey} initMode={tcMode} initRegion={tcRegion} initNight={tcNight} initBallastPxOv={tcBallastPxOv} initCOpPerMl={tcCOpPerMl} initCMobilFix={tcCMobilFix} initCDegarnMl={tcCDegarnMl} initOwnManual={tcOwnManual} initOwnFuelLph={tcOwnFuelLph} initOwnGasoil={tcOwnGasoil} initOwnMaintH={tcOwnMaintH} initOwnLabourH={tcOwnLabourH} initOwnProdMlH={tcOwnProdMlH} onParamsChange={function(p){ if(p.machineKey!==undefined) setTCMachine(p.machineKey); if(p.mode!==undefined) setTCMode(p.mode); if(p.region!==undefined) setTCRegion(p.region); if(p.nightHrs!==undefined) setTCNight(p.nightHrs); if(p.ballastPxOv!==undefined) setTCBallPx(p.ballastPxOv); if(p.cOpPerMl!==undefined) setTCCOp(p.cOpPerMl); if(p.cMobilFix!==undefined) setTCCMF(p.cMobilFix); if(p.cDegarnMl!==undefined) setTCCDeg(p.cDegarnMl); if(p.ownManual!==undefined) setTCOwnManual(p.ownManual); if(p.ownFuelLph!==undefined) setTCOwnFuel(p.ownFuelLph); if(p.ownGasoil!==undefined) setTCOwnGasoil(p.ownGasoil); if(p.ownMaintH!==undefined) setTCOwnMaint(p.ownMaintH); if(p.ownLabourH!==undefined) setTCOwnLab(p.ownLabourH); if(p.ownProdMlH!==undefined) setTCOwnProd(p.ownProdMlH); }}/>}
+                    {ctab==="tcost"&&trackMode==="ballast"&&result&&<TampingCostPanel segs={result.results.map(function(r){return r.seg;})} result={result} horizon={horizon} context={context} platform={tPlatform} appoint={tAppoint} degCycles={tDegCycles} globalSpeed={speed} currencyMap={currencyMap} currency={sharedCurrency}/>}
                     {ctab==="tcost"&&trackMode==="ballast"&&!result&&<div style={{padding:40,textAlign:"center",color:"#6b9ea8",fontSize:13}}>Run the simulation first to see tamping costs.</div>}
                     {ctab==="tcost"&&trackMode!=="ballast"&&<div style={{padding:40,textAlign:"center",color:"#fbbf24",fontSize:13}}>Tamping Cost is only available for ballast track.</div>}
                     {ctab==="cmp"&&<ComparePanel simResult={result} horizon={horizon} context={context} params={{context:context,trains:trains,segments:segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){var b=Object.assign({},s,{radius:s.repr,railGrade:s.grade});if(isBF&&initCond[s.id]){var ic=initCond[s.id];b.initWearV=ic.wearV||0;b.initWearL=ic.wearL||0;b.initRCF=ic.rcf||0;b.initMGT=ic.mgt||0;}return b;}).concat(specialZones.filter(function(z){return z.lengthM>0;}).map(function(z){return {id:z.id,label:z.name,radius:z.radius||9000,railGrade:z.grade||"R260",lengthKm:z.lengthM/1000,fVExtra:z.fVExtra,corrugationMGT:z.corrugation?z.corrMGT:null,isSpecialZone:true,zoneType:z.type};})),strategy:strategy,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon,customLimV:customLimActive?customLimV:null,customLimL:customLimActive?customLimL:null,customResActive:customResActive,customMinRes:customMinRes}} grindEurPerMl={liveGrindRate} replEurPerMl={liveReplRate} grindCostParams={liveGrindCost} calcReplRate={calcReplRateForGrade} currency={sharedCurrency} currencyMap={currencyMap} reprActive={reprActive} reprThresh={reprThresh} reprRemL={reprRemL} reprRemV={reprRemV} reprRcfR={reprRcfR} reprSkip={reprSkip} reprRadiusBased={reprRadiusBased} reprRemLByBand={reprRemLByBand} liveReprRate={liveReprRate} liveReprMobil={liveReprMobil}/>}
@@ -4973,9 +4875,9 @@ export default function App() {
                     <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)",fontSize:11,letterSpacing:2,color:cl.teal,textTransform:"uppercase",fontWeight:700}}>Summary - All Segments</div>
                     <div style={{overflowX:"auto"}}>
                       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                        <thead><tr style={{background:"rgba(255,255,255,0.03)"}}>{["Segment","Radius","Grade","Eff.Hardness","Wear rate V","Wear rate L","Grindings","Tamping","Degarnissage","Reprofiling","Replacement","Final RCF"].map(function(h){return <th key={h} style={{padding:"8px 12px",textAlign:"left",color:cl.dim,fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>;})}</tr></thead>
+                        <thead><tr style={{background:"rgba(255,255,255,0.03)"}}>{["Segment","Radius","Grade","Eff.Hardness","Wear rate V","Wear rate L","Grindings","Reprofiling","Replacement","Final RCF"].map(function(h){return <th key={h} style={{padding:"8px 12px",textAlign:"left",color:cl.dim,fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>;})}</tr></thead>
                         <tbody>
-                          {result.results.map(function(r,i){var last=r.data[r.data.length-1]; var tsm=tampSummaryById[r.seg.id]; return(
+                          {result.results.map(function(r,i){var last=r.data[r.data.length-1];return(
                             <tr key={i} onClick={function(){setAi(i);}} style={{borderTop:"1px solid rgba(255,255,255,0.04)",cursor:"pointer",background:aidx===i?"rgba(125,211,200,0.05)":"transparent"}}>
                               <td style={{padding:"8px 12px",color:"#e8f4f3",fontWeight:500}}>{r.seg.label}</td>
                               <td style={{padding:"8px 12px",fontFamily:"monospace"}}>{r.seg.radius>=9000?"tangent":r.seg.radius+"m"}</td>
@@ -4983,10 +4885,7 @@ export default function App() {
                               <td style={{padding:"8px 12px",fontFamily:"monospace",color:cl.amber}}>{r.he?r.he.toFixed(2):"-"}</td>
                               <td style={{padding:"8px 12px",fontFamily:"monospace",color:cl.teal}}>{r.wrV.toFixed(3)}</td>
                               <td style={{padding:"8px 12px",fontFamily:"monospace",color:cl.amber}}>{r.wrL.toFixed(3)}</td>
-                              <td style={{padding:"8px 12px",fontFamily:"monospace"}}>{r.gCount}</td>
-                              <td style={{padding:"8px 12px",fontFamily:"monospace",color:trackMode==="ballast"?cl.teal:cl.dim}}>{trackMode==="ballast"&&tsm?tsm.nTamp:"-"}</td>
-                              <td style={{padding:"8px 12px",fontFamily:"monospace",color:trackMode==="ballast"&&tsm&&tsm.nDegarn>0?cl.warn:cl.dim}}>{trackMode==="ballast"&&tsm?tsm.nDegarn:"-"}</td>
-                              <td style={{padding:"8px 12px",fontFamily:"monospace",color:reprActive?cl.amber:cl.dim}}>{r.reprCount||0}{reprActive&&r.reprCount>0?" reprofiling":""}</td>
+                              <td style={{padding:"8px 12px",fontFamily:"monospace"}}>{r.gCount}</td><td style={{padding:"8px 12px",fontFamily:"monospace",color:reprActive?cl.amber:cl.dim}}>{r.reprCount||0}{reprActive&&r.reprCount>0?" reprofiling":""}</td>
                               <td style={{padding:"8px 12px"}}>{r.repY?<span style={{color:cl.warn,fontWeight:700}}>Yr {r.repY}</span>:<span style={{color:cl.green}}>&gt; {horizon} yrs</span>}</td>
                               <td style={{padding:"8px 12px"}}>{last&&<RCFBadge v={last.rcf}/>}</td>
                             </tr>
@@ -5004,7 +4903,7 @@ export default function App() {
                     </div>
                     <div style={{overflowX:"auto"}}>
                       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                        <thead><tr style={{background:"rgba(0,0,0,0.2)"}}>{["Segment","Grade","Replacements","Total grindings","Grind cost","Repl. cost","Reprofiling cost","Tamping / Degarn. cost","Lifecycle total"].map(function(h){return <th key={h} style={{padding:"8px 12px",textAlign:"left",color:cl.teal,fontWeight:600,fontSize:10,letterSpacing:1}}>{h}</th>;})}</tr></thead>
+                        <thead><tr style={{background:"rgba(0,0,0,0.2)"}}>{["Segment","Grade","Replacements","Total grindings","Grind cost","Repl. cost","Reprofiling cost","Lifecycle total"].map(function(h){return <th key={h} style={{padding:"8px 12px",textAlign:"left",color:cl.teal,fontWeight:600,fontSize:10,letterSpacing:1}}>{h}</th>;})}</tr></thead>
                         <tbody>
                           {result.results.map(function(r,i){
                             var lenMl=(r.seg.lengthKm||0)*1000;
@@ -5020,12 +4919,10 @@ export default function App() {
                             var reprMobPerInt=reprActive?(liveReprMobil||0)*gFx:0;
                             var reprCostPerInt=reprOpPerInt+reprMobPerInt;
                             var reprCyc=reprActive&&(r.reprCount||0)>0?reprCostPerInt*(r.reprCount||0):0;
-                            var tsm=tampSummaryById[r.seg.id];
-                            var totTamp=trackMode==="ballast"&&tsm?tsm.totalCost:0;
                             var repls=0,totG=0,totR=0,totRepr=0,totP=0,yr=0;
                             if(r.repY){var cl2=r.repY;while(yr+cl2<=horizon){yr+=cl2;repls++;totG+=gCyc;totR+=rCyc;totRepr+=reprCyc;totP+=passes;}var frac=(horizon-yr)/cl2;if(frac>0){totG+=gCyc*frac;totRepr+=reprCyc*frac;totP+=Math.round(passes*frac);}}
                             else{totG=gCyc;totRepr=reprCyc;totP=passes;}
-                            var tot=totG+totR+totRepr+totTamp;
+                            var tot=totG+totR+totRepr;
                             function fmtC(v){return v>=1e6?(v/1e6).toFixed(2)+"M "+gSym:v>=1e3?(v/1e3).toFixed(1)+"k "+gSym:v.toFixed(0)+" "+gSym;}
                             return(
                               <tr key={i} onClick={function(){setAi(i);}} style={{borderTop:"1px solid rgba(255,255,255,0.04)",cursor:"pointer",background:i%2===0?"rgba(125,211,200,0.02)":"transparent"}}>
@@ -5035,8 +4932,7 @@ export default function App() {
                                 <td style={{padding:"8px 12px",fontFamily:"monospace"}}>{totP} passes</td>
                                 <td style={{padding:"8px 12px",fontFamily:"monospace"}}>{fmtC(totG)}</td>
                                 <td style={{padding:"8px 12px",fontFamily:"monospace"}}>{totR>0?fmtC(totR):"-"}</td>
-                                <td style={{padding:"8px 12px",fontFamily:"monospace",color:reprActive&&totRepr>0?cl.amber:cl.dim}}>{reprActive&&totRepr>0?fmtC(totRepr):"-"}</td>
-                                <td style={{padding:"8px 12px",fontFamily:"monospace",color:trackMode==="ballast"&&totTamp>0?cl.warn:cl.dim}}>{trackMode==="ballast"?fmtC(totTamp):"-"}</td>
+                                 <td style={{padding:"8px 12px",fontFamily:"monospace",color:reprActive&&totRepr>0?cl.amber:cl.dim}}>{reprActive&&totRepr>0?fmtC(totRepr):"-"}</td>
                                 <td style={{padding:"8px 12px",fontFamily:"monospace",color:cl.teal,fontWeight:700}}>{fmtC(tot)}</td>
                               </tr>
                             );
@@ -5045,7 +4941,7 @@ export default function App() {
                         <tfoot>
                           <tr style={{borderTop:"2px solid rgba(125,211,200,0.2)",background:"rgba(125,211,200,0.05)"}}>
                             {(function(){
-                              var tR=0,tP=0,tG=0,tRp=0,tRepr=0,tTamp=0,tT=0;
+                              var tR=0,tP=0,tG=0,tRp=0,tRepr=0,tT=0;
                               var gFx2=(currencyMap[sharedCurrency]||currencyMap.EUR||CURRENCIES.EUR).rate;
                               var gSym2=(currencyMap[sharedCurrency]||currencyMap.EUR||CURRENCIES.EUR).symbol;
                               result.results.forEach(function(r){
@@ -5063,9 +4959,7 @@ export default function App() {
                                 if(r.repY){var cl2=r.repY;var rpr=0;while(yr+cl2<=horizon){yr+=cl2;repls++;g+=gCyc;rp+=rCyc;rpr+=reprC2*(r.reprCount||0);tp+=passes;}var frac=(horizon-yr)/cl2;if(frac>0){g+=gCyc*frac;rpr+=reprC2*(r.reprCount||0)*frac;tp+=Math.round(passes*frac);}}
                                 else{g=gCyc;rpr=reprC2*(r.reprCount||0);tp=passes;}
                                  var rRepr=reprActive?rpr:0;
-                                var tsm=tampSummaryById[r.seg.id];
-                                var segTamp=trackMode==="ballast"&&tsm?tsm.totalCost:0;
-                                tR+=repls;tP+=tp;tG+=g;tRp+=rp;tRepr+=rRepr;tTamp+=segTamp;tT+=g+rp+rRepr+segTamp;
+                                tR+=repls;tP+=tp;tG+=g;tRp+=rp;tRepr+=rRepr;tT+=g+rp+rRepr;
                               });
                               function fmtC(v){return v>=1e6?(v/1e6).toFixed(2)+"M "+gSym2:v>=1e3?(v/1e3).toFixed(1)+"k "+gSym2:v.toFixed(0)+" "+gSym2;}
                               return [
@@ -5074,8 +4968,7 @@ export default function App() {
                                 <td key="p" style={{padding:"9px 12px",fontFamily:"monospace"}}>{tP} passes</td>,
                                 <td key="g" style={{padding:"9px 12px",fontFamily:"monospace",fontWeight:700}}>{fmtC(tG)}</td>,
                                 <td key="rp" style={{padding:"9px 12px",fontFamily:"monospace",fontWeight:700}}>{fmtC(tRp)}</td>,
-                                <td key="repr" style={{padding:"9px 12px",fontFamily:"monospace",fontWeight:700,color:reprActive?cl.amber:cl.dim}}>{reprActive?fmtC(tRepr):"-"}</td>,
-                                <td key="tamp" style={{padding:"9px 12px",fontFamily:"monospace",fontWeight:700,color:trackMode==="ballast"?cl.warn:cl.dim}}>{trackMode==="ballast"?fmtC(tTamp):"-"}</td>,
+                                 <td key="repr" style={{padding:"9px 12px",fontFamily:"monospace",fontWeight:700,color:reprActive?cl.amber:cl.dim}}>{reprActive?fmtC(tRepr):"-"}</td>,
                                 <td key="t" style={{padding:"9px 12px",fontFamily:"monospace",color:cl.teal,fontWeight:800,fontSize:13}}>{fmtC(tT)}</td>,
                               ];
                             })()}
