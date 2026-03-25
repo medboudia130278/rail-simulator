@@ -1895,7 +1895,7 @@ function BallastPanel(props) {
   var BAND_LABELS = {r1:"R<100m",r2:"100-200m",r3:"200-400m",r4:"400-800m",r5:"R>=800m"};
 
   var rows = segs.filter(function(s){ return (s.active || s.isSpecialZone || s.lengthKm > 0) && s.lengthKm > 0; }).map(function(seg, si) {
-    var band      = TAMP_BAND(seg.repr || seg.radius || 300);
+    var band      = TAMP_BAND(seg.repr || 300);
     var baseInt   = (TAMP_BASE_MGT[ctx] || TAMP_BASE_MGT.metro)[band] || 25;
     var segSpeed  = seg.speed || globalSpeed;
     var fSpeed    = Math.sqrt(Math.max(20, TAMP_V_REF) / Math.max(20, segSpeed));
@@ -2148,7 +2148,7 @@ function TampingCostPanel(props) {
   var fp  = TAMP_PLATFORM[platform] || 1.0;
 
   var rows = segs.filter(function(s){ return (s.active||s.isSpecialZone||s.lengthKm>0)&&s.lengthKm>0; }).map(function(seg,si) {
-    var band      = TAMP_BAND(seg.repr || seg.radius || 300);
+    var band      = TAMP_BAND(seg.repr || 300);
     var baseInt   = (TAMP_BASE_MGT[ctx]||TAMP_BASE_MGT.metro)[band]||25;
     var segSpeed  = seg.speed || globalSpeed;
     var fSpeed    = Math.sqrt(Math.max(20,TAMP_V_REF)/Math.max(20,segSpeed));
