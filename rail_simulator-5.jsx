@@ -13,7 +13,7 @@ var RAIL_GRADES = {
 };
 var RAIL_TYPES = {
   vignole:{ label:"Vignole Rail",       f_v:1.00, f_l:1.00 },
-  groove: { label:"Groove Rail (Tram)", f_v:1.20, f_l:1.80 },
+  groove: { label:"Groove Rail (Tram)", f_v:1.20, f_l:1.50 },
 };
 var TRACK_MODES = {
   ballast: { label:"Ballasted Track",       f_v:1.00, f_l:1.00 },
@@ -105,11 +105,11 @@ var SPEED_BANDS_L = {
   ],
 };
 var LUBRICATION = {
-  none:    {label:"No lubrication",                f:[1.00,1.00,1.00,1.00,1.00]},
-  poor:    {label:"Poor (badly maintained)",       f:[0.80,0.82,0.88,0.95,1.00]},
-  standard:{label:"Standard (wayside lubrication)",f:[0.55,0.60,0.72,0.90,1.00]},
-  good:    {label:"Good (wayside + onboard)",      f:[0.35,0.40,0.60,0.85,1.00]},
-  optimal: {label:"Optimal (lab conditions only)", f:[0.10,0.15,0.35,0.75,1.00]},
+  none:    {label:"No lubrication",                f:[1.00,1.00,1.00,1.00,1.00], f_rcf:[1.00,1.00,1.00,1.00,1.00]},
+  poor:    {label:"Poor (badly maintained)",       f:[0.80,0.83,0.90,0.97,1.00], f_rcf:[0.97,0.97,0.98,0.99,1.00]},
+  standard:{label:"Standard (wayside lubrication)",f:[0.45,0.52,0.68,0.92,1.00], f_rcf:[0.90,0.88,0.90,0.96,1.00]},
+  good:    {label:"Good (wayside + onboard)",      f:[0.28,0.35,0.55,0.88,1.00], f_rcf:[0.85,0.82,0.86,0.94,1.00]},
+  optimal: {label:"Optimal (lab conditions only)", f:[0.20,0.25,0.45,0.82,1.00], f_rcf:[0.80,0.78,0.83,0.92,1.00]},
 };
 var LIMITS  = { tram:{v:7,l:8}, metro:{v:9,l:11}, heavy:{v:12,l:14} };
 var RESERVE   = { R200:13,  R260:15,  R320Cr:16,  R350HT:17,  R400HT:18  }; // vertical grinding reserve (mm)
@@ -354,11 +354,13 @@ function runSim(params) {
     var speedBandId = TAMP_BAND(seg.radius || seg.repr || 9000);
     var speedLatTable = SPEED_BANDS_L[speedBandId] || SPEED_BANDS_L.r5;
     var sfL=(speedLatTable.find(function(s){return segSpeed<=s.max;})||speedLatTable[speedLatTable.length-1]).f_l;
-    var lubF=(LUBRICATION[lubKey]||LUBRICATION.none).f[ri];
-    var he=Math.min(1.0-(1.0-grade.f_wear)/(1.0+rb.f_l*0.3),1.0);
+    var lub = (LUBRICATION[lubKey]||LUBRICATION.none);
+    var lubF=lub.f[ri];
+    var lubRcfF=lub.f_rcf[ri];
+    var he=1.0-(1.0-grade.f_wear)/(1.0+rb.f_l*0.3);
     var wrV=ctx.baseWearV*rb.f_v*he*rt.f_v*tm.f_v*sfV;
     var wrL=ctx.baseWearL*1.5*rb.f_l*he*rt.f_l*tm.f_l*sfL*lubF;
-    var rcfBase=ctx.rcfRate[ri]*grade.f_rcf*sfV;
+    var rcfBase=ctx.rcfRate[ri]*grade.f_rcf*sfV*lubRcfF;
 
     // Special zone: apply extra wear factor on vertical only
     var fVExtra = seg.fVExtra || 1.0;
@@ -1643,7 +1645,7 @@ var HELP=[
    ]
   },
   {id:"wear",title:"Wear Rate Model",
-   body:"BASE RATE: 0.82 mm/100MGT vertical crown wear. R260 grade, tangent, ballasted track, 80 km/h. Source: Infrabel/TU Delft 2023 (5338 km statistical analysis).\n\nFORMULA:\nwearRate_V = 0.82 x f_V(band) x hardnessEffect x f_railType x f_trackForm x f_speed\nwearRate_L = 1.00 x 1.5 x f_L(band) x hardnessEffect x f_railType x f_trackForm x f_speed x f_lubr\nhardnessEffect = 1 - (1 - f_wear_grade) / (1 + f_L x 0.3)  [caps hardness benefit in tight curves]\n\nPARAMETER IMPACTS:\n- Rail grade: R400HT saves 38% on tangent, only 14% on R<150m. Most effective on gentle curves.\n- Rail type: Groove +20% vertical, +80% lateral vs vignole.\n- Track form: Slab +10-15%, Embedded +15-20% vs ballasted.\n- Speed: <40 km/h = -10% vertical. >120 km/h = +10-35% vertical.",
+   body:"BASE RATE: 0.82 mm/100MGT vertical crown wear. R260 grade, tangent, ballasted track, 80 km/h. Source: Infrabel/TU Delft 2023 (5338 km statistical analysis).\n\nFORMULA:\nwearRate_V = 0.82 x f_V(band) x hardnessEffect x f_railType x f_trackForm x f_speed\nwearRate_L = 1.00 x 1.5 x f_L(band) x hardnessEffect x f_railType x f_trackForm x f_speed x f_lubr\nhardnessEffect = 1 - (1 - f_wear_grade) / (1 + f_L x 0.3)\n\nPARAMETER IMPACTS:\n- Rail grade: harder steels reduce wear on tangent and gentle curves; their benefit progressively weakens in tight curves. Softer grades such as R200 now correctly amplify wear relative to R260.\n- Rail type: Groove +20% vertical, +50% lateral vs vignole.\n- Track form: Slab +10-15%, Embedded +15-20% vs ballasted.\n- Speed: <40 km/h = -10% vertical. >120 km/h = +10-35% vertical.",
    links:[
      {label:"Infrabel/TU Delft (2023) - Full paper, Wear 522",url:"https://doi.org/10.1016/j.wear.2022.204764",type:"paper"},
      {label:"Esveld C. (2001) - Modern Railway Track, 2nd ed.",url:"https://www.mrt-productions.nl/",type:"book"},
@@ -1653,19 +1655,19 @@ var HELP=[
      {heading:"Formula breakdown: wearRate_V",
       text:"wearRate_V = 0.82 x f_V(band) x hardnessEffect x f_railType x f_trackForm x f_speed\n\n0.82 = base vertical wear rate (mm/100MGT) calibrated on R260, tangent, ballasted track, 80 km/h, from Infrabel/TU Delft 2023 measurements.\n\nf_V(band) = radius amplifier for vertical wear (1.0 to 6.0 depending on curve radius).\n\nEach other factor is a multiplier around 1.0 representing deviations from the reference condition."},
      {heading:"Formula breakdown: wearRate_L",
-      text:"wearRate_L = 1.00 x 1.5 x f_L(band) x hardnessEffect x f_railType x f_trackForm x f_speed x f_lubr\n\nThe 1.5 base multiplier reflects that lateral (gauge face) wear is structurally 50% more aggressive than vertical wear even at reference conditions, due to the sliding contact nature of flange/gauge interaction.\n\nf_lubr applies only to lateral wear - lubrication reduces flange friction but has no effect on crown rolling contact."},
+      text:"wearRate_L = 1.00 x 1.5 x f_L(band) x hardnessEffect x f_railType x f_trackForm x f_speed x f_lubr\n\nThe 1.5 base multiplier reflects that lateral (gauge face) wear is structurally 50% more aggressive than vertical wear even at reference conditions, due to the sliding contact nature of flange/gauge interaction.\n\nf_lubr applies to lateral wear only. Lubrication reduces flange/gauge friction, but the running table remains governed by crown contact and speed effects."},
      {heading:"hardnessEffect formula - why it caps in tight curves",
-      text:"hardnessEffect = 1 - (1 - f_wear_grade) / (1 + f_L x 0.3)\n\nThis formula progressively reduces the benefit of hard rail grades in tight curves. In tangent track (f_L=1), a R400HT rail (f_wear=0.45) gives a 42% wear reduction vs R260. But in a R<100m curve (f_L=15), the same R400HT gives only 10% reduction.\n\nReason: in tight curves, wear is driven by abrasive sliding at very high contact forces - a regime where hardness advantage almost disappears. Upgrading to R400HT in tight curves has minimal ROI for wear reduction."},
-     {table:[["Grade","f_wear","Benefit tangent","Benefit R<100m"],
-             ["R200","0.90","-12%","-2%"],
+      text:"hardnessEffect = 1 - (1 - f_wear_grade) / (1 + f_L x 0.3)\n\nThis formula progressively reduces the benefit of hard rail grades in tight curves. In tangent track (f_L=1), a R400HT rail (f_wear=0.38) gives a strong wear reduction vs R260. But in a R<100m curve (f_L=15), the same hard grade still helps, though much less.\n\nThe same logic now works symmetrically for softer steels: R200 is correctly more wearing than R260, but that penalty is also damped in extremely tight curves where sliding dominates everything.\n\nReason: in tight curves, wear is driven by abrasive sliding at very high contact forces - a regime where the material advantage or penalty becomes less dominant than contact geometry."},
+     {table:[["Grade","f_wear","Effect tangent","Effect R<100m"],
+             ["R200","1.34","+34% wear","+7% wear"],
              ["R260 (ref)","1.00","0%","0%"],
-             ["R320Cr","0.75","-31%","-7%"],
-             ["R350HT","0.60","-42%","-9%"],
-             ["R400HT","0.45","-52%","-12%"]]},
+             ["R320Cr","0.70","-23% wear","-6% wear"],
+             ["R350HT","0.50","-33% wear","-10% wear"],
+             ["R400HT","0.38","-41% wear","-13% wear"]]},
    ]
   },
   {id:"rcf",title:"RCF - Rolling Contact Fatigue",
-   body:"DEFINITION: Cyclic plastic deformation at wheel-rail contact causing surface/sub-surface crack initiation. RCF index (0 to 1) = accumulated damage relative to failure threshold.\n\nRCF PARADOX (magic wear rate): Moderate curves (r4, R400-800m) have HIGHER RCF than tight curves (r1). Tight curves wear fast enough to remove the crack layer before propagation. Moderate curves initiate cracks but lack sufficient wear to remove them.\n\nRCF THRESHOLDS:\n- 0.0-0.3: Healthy - preventive grinding sufficient\n- 0.3-0.7: Moderate - corrective grinding required\n- 0.7-1.0: Critical - replacement mandatory (cracks >5-8mm deep)\n\nHEAVY CONTEXT EARLY-GRIND TRIGGERS:\n- r1: 0.45\n- r2: 0.32\n- r3: 0.30\n- r4: 0.32\n- r5: 0.38\nIn heavy rail, grinding is triggered when the MGT interval is reached OR when the segment RCF index reaches its band trigger, provided the rail still has sufficient vertical reserve and remains below replacement threshold.\n\nFORMULA: RCF_increment/yr = rcfBase x MGT x (1 - min(0.80, wearRate/5.0))\nAfter grinding: RCF reduced by passes x rcfReduction x (1 + (1-RCF) x 0.5)",
+   body:"DEFINITION: Cyclic plastic deformation at wheel-rail contact causing surface/sub-surface crack initiation. RCF index (0 to 1) = accumulated damage relative to failure threshold.\n\nRCF PARADOX (magic wear rate): Moderate curves (r4, R400-800m) have HIGHER RCF than tight curves (r1). Tight curves wear fast enough to remove the crack layer before propagation. Moderate curves initiate cracks but lack sufficient wear to remove them.\n\nRCF THRESHOLDS:\n- 0.0-0.3: Healthy - preventive grinding sufficient\n- 0.3-0.7: Moderate - corrective grinding required\n- 0.7-1.0: Critical - replacement mandatory (cracks >5-8mm deep)\n\nHEAVY CONTEXT EARLY-GRIND TRIGGERS:\n- r1: 0.45\n- r2: 0.32\n- r3: 0.30\n- r4: 0.32\n- r5: 0.38\nIn heavy rail, grinding is triggered when the MGT interval is reached OR when the segment RCF index reaches its band trigger, provided the rail still has sufficient vertical reserve and remains below replacement threshold.\n\nLUBRICATION EFFECT ON RCF:\nLubrication now also moderates RCF growth through a dedicated band-based factor. The effect is intentionally weaker than on lateral wear: it reduces damaging creepage and flange/gauge friction, but it is not treated as a direct cure for crown-contact fatigue.\n\nFORMULA: RCF_increment/yr = rcfBase x MGT x (1 - min(0.80, wearRate/5.0))\nwith rcfBase = ctx.rcfRate x grade.f_rcf x f_speed x f_lubr_rcf\nAfter grinding: RCF reduced by passes x rcfReduction x (1 + (1-RCF) x 0.5)",
    links:[
      {label:"Infrabel/Int.J.Fatigue (2025) - 212 instrumented curves analysis",url:"https://doi.org/10.1016/j.ijfatigue.2024.108342",type:"paper"},
      {label:"Ringsberg J.W. (2001) - Life prediction of RCF crack initiation, Int.J.Fatigue 23(7)",url:"https://doi.org/10.1016/S0142-1123(01)00011-5",type:"paper"},
@@ -1705,7 +1707,7 @@ var HELP=[
    ]
   },
   {id:"lubrication",title:"Flange Lubrication",
-   body:"FUNCTION: Reduces flange/gauge face friction. Affects LATERAL wear only. No effect on crown wear or RCF.\n\nFACTORS BY BAND (r1 R<100m to r5 tangent):\n- No lubrication:         1.00 / 1.00 / 1.00 / 1.00 / 1.00\n- Poor/badly maintained:  0.80 / 0.82 / 0.88 / 0.95 / 1.00\n- Standard wayside:       0.55 / 0.60 / 0.72 / 0.90 / 1.00\n- Good (wayside+onboard): 0.35 / 0.40 / 0.60 / 0.85 / 1.00\n- Optimal (lab only):     0.10 / 0.15 / 0.35 / 0.75 / 1.00\n\nIMPACT: Standard wayside reduces lateral wear by 45% on R<100m, 40% on R100-200m, 28% on R200-400m. No effect on tangent. Lateral wear is often the limiting criterion on curves below R200m.\n\nWARNING: Optimal is unrealistic in service. Good is the practical maximum due to contamination, rain, and maintenance gaps.",
+   body:"FUNCTION: Reduces flange/gauge face friction. Primary effect: LATERAL wear reduction. Secondary effect: moderate reduction in RCF growth on curves through reduced damaging creepage.\n\nLATERAL WEAR FACTORS BY BAND (r1 R<100m to r5 tangent):\n- No lubrication:         1.00 / 1.00 / 1.00 / 1.00 / 1.00\n- Poor/badly maintained:  0.80 / 0.83 / 0.90 / 0.97 / 1.00\n- Standard wayside:       0.45 / 0.52 / 0.68 / 0.92 / 1.00\n- Good (wayside+onboard): 0.28 / 0.35 / 0.55 / 0.88 / 1.00\n- Optimal (lab only):     0.20 / 0.25 / 0.45 / 0.82 / 1.00\n\nRCF FACTORS BY BAND:\n- No lubrication:         1.00 / 1.00 / 1.00 / 1.00 / 1.00\n- Poor/badly maintained:  0.97 / 0.97 / 0.98 / 0.99 / 1.00\n- Standard wayside:       0.90 / 0.88 / 0.90 / 0.96 / 1.00\n- Good (wayside+onboard): 0.85 / 0.82 / 0.86 / 0.94 / 1.00\n- Optimal (lab only):     0.80 / 0.78 / 0.83 / 0.92 / 1.00\n\nIMPACT: Standard wayside strongly reduces lateral wear in tight curves and provides a smaller, secondary moderation of RCF growth. Tangent track remains effectively unaffected.\n\nWARNING: Optimal is unrealistic in service. Good is the practical maximum due to contamination, rain, and maintenance gaps.",
    links:[
      {label:"Arias-Cuevas et al. (2010) - Friction modifiers in dry/wet conditions, Wear 268",url:"https://doi.org/10.1016/j.wear.2009.09.006",type:"paper"},
      {label:"Shanghai Metro Line 2 lateral wear study (2021), J.Rail and Rapid Transit",url:"https://doi.org/10.1177/0954409720915584",type:"paper"},
@@ -1713,14 +1715,15 @@ var HELP=[
    ],
    details:[
      {heading:"How lubrication works physically",
-      text:"Flange lubrication introduces a friction modifier between the wheel flange and the rail gauge face. This reduces friction CoF from ~0.50 dry down to 0.10-0.25.\n\nLubrication ONLY affects LATERAL wear. The crown/table contact stays dry because:\n- Lubricant is applied at gauge face level, not on the running table\n- The running surface must maintain CoF > 0.30 for braking and traction\n- Migrating lubricant is quickly removed by wheel rolling action\n\nThis is why the simulator applies f_lubr only to wearRate_L with no effect on wearRate_V or RCF."},
+      text:"Flange lubrication introduces a friction modifier between the wheel flange and the rail gauge face. This reduces friction CoF from ~0.50 dry down to 0.10-0.25.\n\nIts primary effect is on LATERAL wear. The crown/table contact stays mostly dry because:\n- Lubricant is applied at gauge face level, not on the running table\n- The running surface must maintain CoF > 0.30 for braking and traction\n- Migrating lubricant is quickly removed by wheel rolling action\n\nThe simulator therefore applies a strong factor to wearRate_L and only a smaller secondary factor to RCF growth."},
      {heading:"Lubrication factors and their physical basis",
-      text:"f_lubr is a cycle-averaged multiplier on lateral wear rate. Immediately after application, reduction can reach 80-90%, but degrades between applications as lubricant is consumed. The simulator uses averaged values calibrated from Arias-Cuevas (2010) and Shanghai Metro (2021) field data."},
-     {table:[["Mode","f_lubr","Lateral wear reduction","Typical system"],
-             ["None","1.00","0%","No lubrication"],
-             ["Light","0.50","-50%","Periodic trackside greasers"],
-             ["Moderate","0.35","-65%","Wayside + on-board combined"],
-             ["Heavy","0.25","-75%","Continuous on-board system"]]},
+      text:"f_lubr is a cycle-averaged multiplier on lateral wear rate. Immediately after application, reduction can be very strong, but degrades between applications as lubricant is consumed. The simulator uses band-based averaged values for lateral wear plus a more conservative band-based factor for RCF moderation."},
+     {table:[["Mode","r1 wearL","r2 wearL","r3 wearL","r1 RCF","r2 RCF","Typical system"],
+             ["None","1.00","1.00","1.00","1.00","1.00","No lubrication"],
+             ["Poor","0.80","0.83","0.90","0.97","0.97","Badly maintained greasers"],
+             ["Standard","0.45","0.52","0.68","0.90","0.88","Wayside lubrication"],
+             ["Good","0.28","0.35","0.55","0.85","0.82","Wayside + onboard"],
+             ["Optimal","0.20","0.25","0.45","0.80","0.78","Lab / idealized"]]},
      {heading:"When lubrication is and is not beneficial",
       text:"Lubrication is highly effective in curves below R400m where lateral wear dominates. In tight curves (R<200m), reducing lateral wear by 50-75% can extend rail life by 30-60% and reduce grinding frequency.\n\nIn tangent track and large-radius curves (R>800m), lateral wear is minimal and lubrication provides little benefit. Excessive lubrication in tangent zones can reduce braking CoF below safety thresholds.\n\nPractical rule: apply lubrication selectively in curves R<400m."},
    ]
@@ -3436,6 +3439,37 @@ export default function App() {
   const [tcOwnMaintH,  setTCOwnMaint] = useState(null);
   const [tcOwnLabourH, setTCOwnLab]   = useState(null);
   const [tcOwnProdMlH, setTCOwnProd]  = useState(null);
+
+  function enforceContextCombination(nextContext, nextRailType, nextTrackMode) {
+    var rt = nextRailType;
+    var tm = nextTrackMode;
+    if(nextContext==="heavy"){
+      if(rt==="groove") rt="vignole";
+      if(tm==="embedded") tm="ballast";
+    }
+    return {railType:rt, trackMode:tm};
+  }
+  function handleContextChange(nextContext){
+    var next = enforceContextCombination(nextContext, railType, trackMode);
+    setCon(nextContext);
+    if(next.railType!==railType) setRT(next.railType);
+    if(next.trackMode!==trackMode) setTM(next.trackMode);
+  }
+  function handleRailTypeChange(nextRailType){
+    var next = enforceContextCombination(context, nextRailType, trackMode);
+    setRT(next.railType);
+    if(next.trackMode!==trackMode) setTM(next.trackMode);
+  }
+  function handleTrackModeChange(nextTrackMode){
+    var next = enforceContextCombination(context, railType, nextTrackMode);
+    setTM(next.trackMode);
+    if(next.railType!==railType) setRT(next.railType);
+  }
+  useEffect(function(){
+    var next = enforceContextCombination(context, railType, trackMode);
+    if(next.railType!==railType) setRT(next.railType);
+    if(next.trackMode!==trackMode) setTM(next.trackMode);
+  }, [context, railType, trackMode]);
   // Reprofiling model
   const [reprActive,  setReprActive] = useState(false);
   const [reprThresh,  setReprThresh] = useState(60);
@@ -4513,7 +4547,7 @@ export default function App() {
 
           <Card title="Context">
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-              {Object.keys(CONTEXTS).map(function(k){return <Btn key={k} onClick={function(){setCon(k);}} active={context===k}>{CONTEXTS[k].label}</Btn>;})}
+              {Object.keys(CONTEXTS).map(function(k){return <Btn key={k} onClick={function(){handleContextChange(k);}} active={context===k}>{CONTEXTS[k].label}</Btn>;})}
             </div>
           </Card>
 
@@ -4825,14 +4859,16 @@ export default function App() {
 
           <Card title="Rail Parameters">
             <div style={{display:"grid",gap:10}}>
-              <div><Lbl>Rail Type</Lbl><Sel value={railType} onChange={setRT} opts={Object.keys(RAIL_TYPES).map(function(k){return {v:k,l:RAIL_TYPES[k].label};})}/></div>
-              <div><Lbl>Track Form</Lbl><Sel value={trackMode} onChange={setTM} opts={Object.keys(TRACK_MODES).map(function(k){return {v:k,l:TRACK_MODES[k].label};})}/></div>
+              <div><Lbl>Rail Type</Lbl><Sel value={railType} onChange={handleRailTypeChange} opts={Object.keys(RAIL_TYPES).filter(function(k){return !(context==="heavy"&&k==="groove");}).map(function(k){return {v:k,l:RAIL_TYPES[k].label};})}/></div>
+              <div><Lbl>Track Form</Lbl><Sel value={trackMode} onChange={handleTrackModeChange} opts={Object.keys(TRACK_MODES).filter(function(k){return !(context==="heavy"&&k==="embedded");}).map(function(k){return {v:k,l:TRACK_MODES[k].label};})}/></div>
               <div><Lbl>Line speed (km/h)</Lbl><Inp value={speed} onChange={setSp} min={20} max={320}/></div>
               <div>
                 <Lbl>Flange Lubrication</Lbl>
                 <Sel value={lubr} onChange={setLb} opts={Object.keys(LUBRICATION).map(function(k){return {v:k,l:LUBRICATION[k].label};})}/>
                 <div style={{fontSize:11,color:cl.dim,marginTop:5}}>{lubr==="none"&&"No lateral wear reduction - dry conditions"}{lubr==="poor"&&"Badly maintained - low reduction"}{lubr==="standard"&&"Correctly adjusted wayside - significant reduction on tight curves"}{lubr==="good"&&"Wayside and onboard combined - good coverage"}{lubr==="optimal"&&"Lab conditions only - unrealistic in revenue service"}</div>
               </div>
+              {context==="heavy"&&<div style={{fontSize:11,color:cl.dim,background:"rgba(125,211,200,0.05)",borderRadius:6,padding:"8px 10px",border:"1px solid rgba(125,211,200,0.1)"}}>Heavy rail is currently restricted to Vignole rail with Ballasted or Slab track.</div>}
+              {context==="metro"&&(railType==="groove"||trackMode==="embedded")&&<div style={{fontSize:11,color:cl.amber,background:"rgba(251,191,36,0.08)",borderRadius:6,padding:"8px 10px",border:"1px solid rgba(251,191,36,0.18)"}}>Atypical metro configuration. Use groove rail or embedded track only for special urban or depot cases.</div>}
               <div style={{fontSize:11,color:cl.dim,background:"rgba(125,211,200,0.05)",borderRadius:6,padding:"8px 10px",border:"1px solid rgba(125,211,200,0.1)"}}>Rail hardness (grade) is set per segment in the section above</div>
             </div>
           </Card>
