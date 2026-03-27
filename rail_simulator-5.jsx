@@ -26,11 +26,11 @@ var CONTEXTS = {
   heavy:{ label:"Heavy Rail",  qRef:22.5, baseWearV:0.82, baseWearL:1.00, rcfRate:[0.002,0.008,0.014,0.009,0.003] },
 };
 var BANDS = [
-  {id:"r1",label:"R < 100 m",       rMin:0,   rMax:100,   f_v:6.0,f_l:15.0,grind:{tram:0.5,metro:3, heavy:999}},
-  {id:"r2",label:"100 to 200 m",    rMin:100, rMax:200,   f_v:4.0,f_l:9.0, grind:{tram:1.0,metro:5, heavy:20 }},
-  {id:"r3",label:"200 to 400 m",    rMin:200, rMax:400,   f_v:2.5,f_l:5.0, grind:{tram:2.0,metro:8, heavy:30 }},
-  {id:"r4",label:"400 to 800 m",    rMin:400, rMax:800,   f_v:1.5,f_l:2.5, grind:{tram:3.5,metro:12,heavy:50 }},
-  {id:"r5",label:"R >= 800 m",      rMin:800, rMax:99999, f_v:1.0,f_l:1.0, grind:{tram:5.0,metro:20,heavy:80 }},
+  {id:"r1",label:"R < 100 m",       rMin:0,   rMax:100,   f_v:6.0,f_l:15.0,grind:{tram:999,metro:15,heavy:999}},
+  {id:"r2",label:"100 to 200 m",    rMin:100, rMax:200,   f_v:4.0,f_l:9.0, grind:{tram:12, metro:18,heavy:20 }},
+  {id:"r3",label:"200 to 400 m",    rMin:200, rMax:400,   f_v:2.5,f_l:5.0, grind:{tram:18, metro:24,heavy:30 }},
+  {id:"r4",label:"400 to 800 m",    rMin:400, rMax:800,   f_v:1.5,f_l:2.5, grind:{tram:28, metro:36,heavy:50 }},
+  {id:"r5",label:"R >= 800 m",      rMin:800, rMax:99999, f_v:1.0,f_l:1.0, grind:{tram:40, metro:55,heavy:80 }},
 ];
 var SPECIAL_ZONE_TYPES = {
   braking:   { label:"Braking zone (station entry)",        fVExtra:2.2, fVRange:[1.5,3.5], corrMGT:8,  icon:"B" },
@@ -118,6 +118,18 @@ var MIN_RES_V = { R200:3.0, R260:3.0, R320Cr:3.0, R350HT:3.5, R400HT:4.0 }; // m
 var MIN_RES_L = { R200:3.0, R260:3.0, R320Cr:3.5, R350HT:3.5, R400HT:4.0 }; // min lateral reserve before replacement
 var RCF_MAX = 0.70;
 var HEAVY_RCF_GRIND_TRIGGER = { r1:0.45, r2:0.32, r3:0.30, r4:0.32, r5:0.38 };
+var CORRECTIVE_GRIND_TRIGGER = {
+  tram:  { wVFrac:0.35, rcf:0.35 },
+  metro: { wVFrac:0.30, rcf:0.30 },
+};
+var SPECIAL_ZONE_CORRECTIVE_TRIGGER = {
+  tram:  { wVFrac:0.45, rcf:0.35 },
+  metro: { wVFrac:0.40, rcf:0.30 },
+};
+var SPECIAL_ZONE_CORRECTIVE_REARM = {
+  tram:  { wVFrac:0.20, rcf:0.20 },
+  metro: { wVFrac:0.20, rcf:0.20 },
+};
 
 // ---- TAMPING CONSTANTS ----
 var TAMP_BASE_MGT = {
@@ -367,21 +379,27 @@ function runSim(params) {
     wrV = wrV * fVExtra;
 
     var gi=rb.grind[params.context]||999;
-    // Corrugation: override grinding interval if configured
+    // Corrugation: override preventive grinding interval if configured
     var corrMGT = seg.corrugationMGT || null;
-    var gMGT = corrMGT
+    var gMGT = (params.strategy==="preventive" && corrMGT)
       ? corrMGT
       : (params.strategy==="preventive" ? gi : gi*3);
     var resI=params.railType==="groove"?12:(RESERVE[seg.railGrade]||15);
     var resLI=(RESERVE_L[seg.railGrade]||8); // lateral grinding reserve from constants
     var minResV=params.customResActive ? (params.customMinRes||3.0) : (MIN_RES_V[seg.railGrade]||3.0);
     var minResL=params.customResActive ? (params.customMinRes||3.0) : (MIN_RES_L[seg.railGrade]||3.0);
-    var gp=params.strategy==="preventive"?{rem:0.20,rcfR:0.30,pwf:0.75,pmgt:gi*0.85}:{rem:0.55,rcfR:0.18,pwf:0.92,pmgt:gi*0.40};
-    var segReprRemL = reprActive ? (reprRadiusBased ? getBandReprRemL(seg.radius||9000, reprRemLByBand) : reprRemLGlobal) : 0;
+    var gp=params.strategy==="preventive"
+      ? {rem:0.20,rcfR:0.30,pwf:0.75,pmgt:gi*0.85}
+      : {rem:0.55,rcfR:0.18,pwf:0.92,pmgt:params.context==="heavy" ? gi*0.40 : 2.0};
+    var segRadius = seg.radius || 9000;
+    var segReprRemL = reprActive
+      ? (segRadius >= 800 ? 0 : (reprRadiusBased ? getBandReprRemL(segRadius, reprRemLByBand) : reprRemLGlobal))
+      : 0;
     var segReprRemV = segReprRemL * 0.30; // vertical removal = 30% of lateral (Speno TB-2019-04)
     var wV=seg.initWearV||0, wL=seg.initWearL||0, rcf=Math.min(seg.initRCF||0,0.99);
     var res=Math.max(minResV+0.5,resI-(wV*0.8)), resL=Math.max(minResL+0.5,resLI-(wL*0.7));
     var mgtSG=0, totMGT=seg.initMGT||0, pgLeft=0, gCnt=0, reprCnt=0, reprFlag=false, repY=null, data=[];
+    var specialCorrectiveArmedWV = true, specialCorrectiveArmedRCF = true;
     for(var y=1;y<=params.horizonYears;y++){
       totMGT+=mgtPY; mgtSG+=mgtPY;
       var wf=pgLeft>0?gp.pwf:1.0; pgLeft=Math.max(0,pgLeft-mgtPY);
@@ -396,21 +414,71 @@ function runSim(params) {
         pgLeft=gi*0.70;
         reprCnt++; reprFlag=true; reprofiled=true;
       }
-      var ground=false;
-      var grindByMGT = mgtSG>=gMGT;
-      var grindByRCF = params.context==="heavy" && rcf>=(HEAVY_RCF_GRIND_TRIGGER[rb.id]||RCF_MAX);
-      if((grindByMGT||grindByRCF)&&rcf<RCF_MAX&&res>minResV+0.5){
+      var ground=false, grindCause=null, grindPasses=0, preGrindRCF=null, postGrindRCF=null, preGrindWearV=null, postGrindWearV=null;
+      var grindByMGT = params.strategy==="preventive" && mgtSG>=gMGT;
+      var grindByHeavyRCF = params.strategy==="corrective" && params.context==="heavy" && rcf>=(HEAVY_RCF_GRIND_TRIGGER[rb.id]||RCF_MAX);
+      var grindByCorrugation = params.strategy==="corrective" && seg.isSpecialZone && params.context!=="heavy" && corrMGT && mgtSG>=corrMGT;
+      var baseCorrectiveTrigger = CORRECTIVE_GRIND_TRIGGER[params.context] || null;
+      var correctiveTrigger = seg.isSpecialZone && params.strategy==="corrective" && params.context!=="heavy"
+        ? (SPECIAL_ZONE_CORRECTIVE_TRIGGER[params.context] || baseCorrectiveTrigger)
+        : baseCorrectiveTrigger;
+      var specialZoneRearm = SPECIAL_ZONE_CORRECTIVE_REARM[params.context] || null;
+      if(seg.isSpecialZone && params.strategy==="corrective" && params.context!=="heavy" && specialZoneRearm){
+        if(!specialCorrectiveArmedWV && wV < specialZoneRearm.wVFrac * limits.v) specialCorrectiveArmedWV = true;
+        if(!specialCorrectiveArmedRCF && rcf < specialZoneRearm.rcf) specialCorrectiveArmedRCF = true;
+      }
+      var usesSpecialZoneHysteresis = seg.isSpecialZone && params.strategy==="corrective" && params.context!=="heavy" && correctiveTrigger;
+      var specialZoneWvTrigger = usesSpecialZoneHysteresis && specialCorrectiveArmedWV && wV >= correctiveTrigger.wVFrac * limits.v;
+      var specialZoneRcfTrigger = usesSpecialZoneHysteresis && specialCorrectiveArmedRCF && rcf >= correctiveTrigger.rcf;
+      var standardConditionTrigger = params.strategy==="corrective" && correctiveTrigger && pgLeft<=0 && (
+        wV >= correctiveTrigger.wVFrac * limits.v ||
+        rcf >= correctiveTrigger.rcf
+      );
+      var standardWvTrigger = !usesSpecialZoneHysteresis && params.strategy==="corrective" && correctiveTrigger && pgLeft<=0 && wV >= correctiveTrigger.wVFrac * limits.v;
+      var standardRcfTrigger = !usesSpecialZoneHysteresis && params.strategy==="corrective" && correctiveTrigger && pgLeft<=0 && rcf >= correctiveTrigger.rcf;
+      var grindByCondition = usesSpecialZoneHysteresis
+        ? (specialZoneWvTrigger || specialZoneRcfTrigger)
+        : standardConditionTrigger;
+      if((grindByMGT||grindByHeavyRCF||grindByCorrugation||grindByCondition)&&rcf<RCF_MAX&&res>minResV+0.5){
         if(reprFlag&&reprSkip){mgtSG=0;reprFlag=false;}
         else{
-          var passes=params.strategy==="corrective"?Math.max(1,Math.min(4,Math.ceil(rcf/0.12))):1;
+          preGrindRCF = rcf;
+          preGrindWearV = wV;
+          var corrugationOnly = grindByCorrugation && !grindByHeavyRCF && !specialZoneWvTrigger && !specialZoneRcfTrigger && !standardWvTrigger && !standardRcfTrigger;
+          var passes=params.strategy==="corrective"
+            ? (corrugationOnly ? 1 : Math.max(1,Math.min(4,Math.ceil(rcf/0.12))))
+            : 1;
           var rem=passes*gp.rem;
           res-=rem; rcf=Math.max(0,rcf-passes*gp.rcfR*(1.0+(1.0-rcf)*0.5)); wV=Math.max(0,wV-rem*0.2);
           pgLeft=gp.pmgt; mgtSG=0; gCnt++; ground=true; reprFlag=false;
+          grindPasses = passes;
+          postGrindRCF = rcf;
+          postGrindWearV = wV;
+          if(grindByMGT) grindCause = "MGT";
+          else if(grindByHeavyRCF) grindCause = "RCF heavy";
+          else if(corrugationOnly) grindCause = "corrugation";
+          else if(grindByCorrugation && specialZoneWvTrigger && specialZoneRcfTrigger) grindCause = "corrugation + wV + RCF";
+          else if(grindByCorrugation && specialZoneWvTrigger) grindCause = "corrugation + wV";
+          else if(grindByCorrugation && specialZoneRcfTrigger) grindCause = "corrugation + RCF";
+          else if(grindByCorrugation && standardWvTrigger && standardRcfTrigger) grindCause = "corrugation + wV + RCF";
+          else if(grindByCorrugation && standardWvTrigger) grindCause = "corrugation + wV";
+          else if(grindByCorrugation && standardRcfTrigger) grindCause = "corrugation + RCF";
+          else if(specialZoneWvTrigger && specialZoneRcfTrigger) grindCause = "wV + RCF";
+          else if(specialZoneWvTrigger) grindCause = "wV";
+          else if(specialZoneRcfTrigger) grindCause = "RCF";
+          else if(standardWvTrigger && standardRcfTrigger) grindCause = "wV + RCF";
+          else if(standardWvTrigger) grindCause = "wV";
+          else if(standardRcfTrigger) grindCause = "RCF";
+          else if(grindByCondition) grindCause = "condition";
+          if(usesSpecialZoneHysteresis){
+            if(specialZoneWvTrigger) specialCorrectiveArmedWV = false;
+            if(specialZoneRcfTrigger) specialCorrectiveArmedRCF = false;
+          }
         }
       }
       // Replacement: vertical wear, lateral wear, reserve exhausted (V or L), or RCF critical
       var repl=wV>=limits.v||wL>=limits.l||res<=minResV||resL<=minResL||rcf>=RCF_MAX;
-      data.push({year:y,mgt:+totMGT.toFixed(2),wearV:+Math.min(wV,limits.v).toFixed(3),wearL:+Math.min(wL,limits.l).toFixed(3),rcf:+Math.min(rcf,1).toFixed(3),res:+Math.max(0,res).toFixed(2),resL:+Math.max(0,resL).toFixed(2),ground:ground?1:0,reprofiled:(reprofiled&&!repl)?1:0,repl:repl?1:0});
+      data.push({year:y,mgt:+totMGT.toFixed(2),wearV:+Math.min(wV,limits.v).toFixed(3),wearL:+Math.min(wL,limits.l).toFixed(3),rcf:+Math.min(rcf,1).toFixed(3),res:+Math.max(0,res).toFixed(2),resL:+Math.max(0,resL).toFixed(2),ground:ground?1:0,reprofiled:(reprofiled&&!repl)?1:0,repl:repl?1:0,grindCause:grindCause,grindPasses:grindPasses,preGrindRCF:preGrindRCF!==null?+preGrindRCF.toFixed(3):null,postGrindRCF:postGrindRCF!==null?+postGrindRCF.toFixed(3):null,preGrindWearV:preGrindWearV!==null?+Math.min(preGrindWearV,limits.v).toFixed(3):null,postGrindWearV:postGrindWearV!==null?+Math.min(postGrindWearV,limits.v).toFixed(3):null});
       if(repl&&!repY){repY=y;break;}
     }
     return {seg:seg,rb:rb,wrV:wrV,wrL:wrL,he:he,segSpeed:segSpeed,mgtPY:mgtPY,eqPY:eqPY,gCount:gCnt,reprCount:reprCnt,repY:repY,data:data,limits:limits,resL:+resL.toFixed(2)};
@@ -430,7 +498,23 @@ function Btn(p){return <button onClick={p.onClick} style={{background:p.active?c
 function Card(p){return <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"18px 20px",marginBottom:16}}><div style={{fontSize:10,fontWeight:700,letterSpacing:3,color:cl.teal,textTransform:"uppercase",marginBottom:14}}>{p.title}</div>{p.children}</div>;}
 function Kpi(p){var c=p.warn?cl.warn:cl.teal;return <div style={{background:p.warn?"rgba(248,113,113,0.08)":"rgba(125,211,200,0.05)",border:"1px solid "+(p.warn?"rgba(248,113,113,0.25)":"rgba(125,211,200,0.15)"),borderRadius:8,padding:"10px 14px",flex:1,minWidth:100}}><div style={{fontSize:10,color:p.warn?cl.warn:cl.dim,letterSpacing:2,textTransform:"uppercase",marginBottom:4}}>{p.label}</div><div style={{fontSize:18,fontWeight:700,color:c,fontFamily:"monospace"}}>{p.value}<span style={{fontSize:11,fontWeight:400,marginLeft:4,color:cl.muted}}>{p.unit}</span></div></div>;}
 function RCFBadge(p){var c=p.v<0.3?cl.green:p.v<0.7?cl.amber:cl.warn,l=p.v<0.3?"HEALTHY":p.v<0.7?"MODERATE":"CRITICAL";return <span style={{background:c+"22",color:c,border:"1px solid "+c+"55",borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:700}}>{l}</span>;}
-function Tip(p){if(!p.active||!p.payload||!p.payload.length)return null;return <div style={{background:"#0d1f26",border:"1px solid rgba(125,211,200,0.25)",borderRadius:8,padding:"10px 14px",fontSize:12}}><div style={{color:cl.teal,marginBottom:6,fontWeight:700}}>Year {p.label}</div>{p.payload.map(function(x){return <div key={x.name} style={{color:x.color,marginBottom:2}}>{x.name}: <b>{typeof x.value==="number"?x.value.toFixed(3):x.value}</b></div>;})}</div>;}
+function Tip(p){
+  if(!p.active||!p.payload||!p.payload.length)return null;
+  var row = p.payload[0] && p.payload[0].payload;
+  return <div style={{background:"#0d1f26",border:"1px solid rgba(125,211,200,0.25)",borderRadius:8,padding:"10px 14px",fontSize:12}}>
+    <div style={{color:cl.teal,marginBottom:6,fontWeight:700}}>Year {p.label}</div>
+    {p.payload.map(function(x){return <div key={x.name} style={{color:x.color,marginBottom:2}}>{x.name}: <b>{typeof x.value==="number"?x.value.toFixed(3):x.value}</b></div>;})}
+    {row&&row.ground?(
+      <div style={{marginTop:8,paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.08)"}}>
+        <div style={{color:cl.green,fontWeight:700,marginBottom:4}}>Grinding debug</div>
+        {row.grindCause&&<div style={{color:cl.text,marginBottom:2}}>Cause: <b>{row.grindCause}</b></div>}
+        {row.preGrindRCF!==null&&row.preGrindRCF!==undefined&&<div style={{color:cl.warn,marginBottom:2}}>RCF pre/post: <b>{row.preGrindRCF.toFixed(3)}</b>{" -> "}<b>{row.postGrindRCF.toFixed(3)}</b></div>}
+        {row.preGrindWearV!==null&&row.preGrindWearV!==undefined&&<div style={{color:cl.teal,marginBottom:2}}>Wear V pre/post: <b>{row.preGrindWearV.toFixed(3)}</b>{" -> "}<b>{row.postGrindWearV.toFixed(3)}</b></div>}
+        {row.grindPasses?<div style={{color:cl.dim}}>Passes: <b>{row.grindPasses}</b></div>:null}
+      </div>
+    ):null}
+  </div>;
+}
 
 // ---- VALIDATION ----
 
@@ -1667,7 +1751,7 @@ var HELP=[
    ]
   },
   {id:"rcf",title:"RCF - Rolling Contact Fatigue",
-   body:"DEFINITION: Cyclic plastic deformation at wheel-rail contact causing surface/sub-surface crack initiation. RCF index (0 to 1) = accumulated damage relative to failure threshold.\n\nRCF PARADOX (magic wear rate): Moderate curves (r4, R400-800m) have HIGHER RCF than tight curves (r1). Tight curves wear fast enough to remove the crack layer before propagation. Moderate curves initiate cracks but lack sufficient wear to remove them.\n\nRCF THRESHOLDS:\n- 0.0-0.3: Healthy - preventive grinding sufficient\n- 0.3-0.7: Moderate - corrective grinding required\n- 0.7-1.0: Critical - replacement mandatory (cracks >5-8mm deep)\n\nHEAVY CONTEXT EARLY-GRIND TRIGGERS:\n- r1: 0.45\n- r2: 0.32\n- r3: 0.30\n- r4: 0.32\n- r5: 0.38\nIn heavy rail, grinding is triggered when the MGT interval is reached OR when the segment RCF index reaches its band trigger, provided the rail still has sufficient vertical reserve and remains below replacement threshold.\n\nLUBRICATION EFFECT ON RCF:\nLubrication now also moderates RCF growth through a dedicated band-based factor. The effect is intentionally weaker than on lateral wear: it reduces damaging creepage and flange/gauge friction, but it is not treated as a direct cure for crown-contact fatigue.\n\nFORMULA: RCF_increment/yr = rcfBase x MGT x (1 - min(0.80, wearRate/5.0))\nwith rcfBase = ctx.rcfRate x grade.f_rcf x f_speed x f_lubr_rcf\nAfter grinding: RCF reduced by passes x rcfReduction x (1 + (1-RCF) x 0.5)",
+   body:"DEFINITION: Cyclic plastic deformation at wheel-rail contact causing surface/sub-surface crack initiation. RCF index (0 to 1) = accumulated damage relative to failure threshold.\n\nRCF PARADOX (magic wear rate): Moderate curves (r4, R400-800m) have HIGHER RCF than tight curves (r1). Tight curves wear fast enough to remove the crack layer before propagation. Moderate curves initiate cracks but lack sufficient wear to remove them.\n\nRCF THRESHOLDS:\n- 0.0-0.3: Healthy - preventive grinding sufficient\n- 0.3-0.7: Moderate - corrective grinding required\n- 0.7-1.0: Critical - replacement mandatory (cracks >5-8mm deep)\n\nHEAVY CONTEXT EARLY-GRIND TRIGGERS:\n- r1: 0.45\n- r2: 0.32\n- r3: 0.30\n- r4: 0.32\n- r5: 0.38\nIn heavy rail, grinding is triggered when the MGT interval is reached OR when the segment RCF index reaches its band trigger, provided the rail still has sufficient vertical reserve and remains below replacement threshold.\n\nSPECIAL ZONES AND CORRUGATION:\nOn tram / metro special zones, corrugation risk can add a corrective trigger through corrMGT even when the RCF index remains below the normal corrective threshold. This is a pragmatic proxy for short-pitch surface defects that are not explicitly modelled as a separate roughness state variable.\n\nLUBRICATION EFFECT ON RCF:\nLubrication now also moderates RCF growth through a dedicated band-based factor. The effect is intentionally weaker than on lateral wear: it reduces damaging creepage and flange/gauge friction, but it is not treated as a direct cure for crown-contact fatigue.\n\nFORMULA: RCF_increment/yr = rcfBase x MGT x (1 - min(0.80, wearRate/5.0))\nwith rcfBase = ctx.rcfRate x grade.f_rcf x f_speed x f_lubr_rcf\nAfter grinding: RCF reduced by passes x rcfReduction x (1 + (1-RCF) x 0.5)",
    links:[
      {label:"Infrabel/Int.J.Fatigue (2025) - 212 instrumented curves analysis",url:"https://doi.org/10.1016/j.ijfatigue.2024.108342",type:"paper"},
      {label:"Ringsberg J.W. (2001) - Life prediction of RCF crack initiation, Int.J.Fatigue 23(7)",url:"https://doi.org/10.1016/S0142-1123(01)00011-5",type:"paper"},
@@ -1684,7 +1768,7 @@ var HELP=[
    ]
   },
   {id:"grinding",title:"Grinding Strategy",
-   body:"PREVENTIVE strategy:\n- Interval: base table per band/context (e.g. 20 MGT metro r4, 80 MGT heavy r5)\n- Removal per pass: 0.20mm | Post-grind wear factor: 0.75 | RCF reduction: ~30%\n\nCORRECTIVE strategy:\n- Interval: 3x longer than preventive base\n- Removal: 0.55mm/pass, up to 4 passes | Post-grind factor: 0.92\n\nHEAVY RCF-BASED EARLY TRIGGER:\n- In heavy rail, grinding is triggered when the MGT cycle is reached OR when RCF reaches the band trigger\n- r1: 0.45 | r2: 0.32 | r3: 0.30 | r4: 0.32 | r5: 0.38\n- The early trigger remains bounded by reserve feasibility and does not override replacement once RCF reaches 0.70\n\nREPROFILING interaction:\n- Reprofiling restores crown AND gauge face -- next scheduled grinding pass is skipped (skip-next-grinding toggle, active by default)\n- Post-reprofiling wear factor: 0.70 (better than grinding alone -- wider contact ellipse restored)\n- reprRemV = reprRemL x 0.30 (Speno TB-2019-04 calibration)\n- R<100m: reprRemL=3.0mm -> reprRemV=0.9mm | R100-200m: 2.0->0.6mm | R200-400m: 1.0->0.3mm | R400-800m: 0.5->0.15mm | R>=800m: disabled",
+   body:"PREVENTIVE strategy:\n- Interval: base table per band/context (tram: r1 disabled, r2 12, r3 18, r4 28, r5 40 MGT | metro: r1 15, r2 18, r3 24, r4 36, r5 55 | heavy: r1 999, r2 20, r3 30, r4 50, r5 80)\n- Special zones with corrugation risk can override the preventive interval through corrMGT\n- Removal per pass: 0.20mm | Post-grind wear factor: 0.75 | RCF reduction: ~30%\n\nCORRECTIVE strategy:\n- Tram / metro: condition-based, not simple 3x interval. Triggered by vertical wear and/or RCF threshold; special zones can also trigger on corrugation MGT when corrugation risk is active\n- Heavy rail: triggered when the MGT cycle is reached OR when band RCF reaches the heavy threshold\n- Removal: 0.55mm/pass, up to 4 passes | Post-grind factor: 0.92\n- Corrugation-only corrective trigger on special zones is capped to 1 pass\n\nHEAVY RCF-BASED EARLY TRIGGER:\n- In heavy rail, grinding is triggered when the MGT cycle is reached OR when RCF reaches the band trigger\n- r1: 0.45 | r2: 0.32 | r3: 0.30 | r4: 0.32 | r5: 0.38\n- The early trigger remains bounded by reserve feasibility and does not override replacement once RCF reaches 0.70\n\nREPROFILING interaction:\n- Reprofiling restores crown AND gauge face -- next scheduled grinding pass is skipped (skip-next-grinding toggle, active by default)\n- Post-reprofiling wear factor: 0.70 (better than grinding alone -- wider contact ellipse restored)\n- reprRemV = reprRemL x 0.30 (Speno TB-2019-04 calibration)\n- R<100m: reprRemL=3.0mm -> reprRemV=0.9mm | R100-200m: 2.0->0.6mm | R200-400m: 1.0->0.3mm | R400-800m: 0.5->0.15mm | R>=800m: disabled in all modes",
    links:[
      {label:"Grassie S.L. (2005) - Rail corrugation: measurement, understanding and treatment, Wear 258",url:"https://doi.org/10.1016/j.wear.2004.03.066",type:"paper"},
      {label:"Infrabel - Grinding Management Report (2022)",url:"https://www.infrabel.be/en/rail-safety",type:"report"},
@@ -1695,7 +1779,7 @@ var HELP=[
      {heading:"Preventive strategy - parameter detail",
       text:"Interval (MGT-based): The grinding interval is expressed in MGT, not calendar time, because traffic tonnage drives damage accumulation. A segment carrying 10 MGT/yr on r4 metro is ground every ~2 years (20 MGT base). The same segment at 5 MGT/yr is ground every ~4 years.\n\nHeavy rail addition: the simulator can trigger grinding before the nominal MGT interval if the segment RCF reaches its band threshold (r1 0.45, r2 0.32, r3 0.30, r4 0.32, r5 0.38).\n\nRemoval 0.20 mm/pass: This removes exactly the ratchetted surface layer where micro-cracks initiate. It is the minimum depth to reach sound material without unnecessarily consuming grinding reserve.\n\nPost-grinding wear factor 0.75: After reprofilage, the restored wheel-rail conformity distributes contact pressure over a wider ellipse, reducing local stress and future wear rate by ~25% for the next several MGT. Calibrated from Guangzhou Metro 2021 post-grinding monitoring.\n\nRCF reduction ~30%/pass: Each preventive pass physically removes the damaged layer, resetting the damage index downward. With a healthy bonus (RCF < 0.3), the reduction slightly exceeds 30% because cracks are still superficial and entirely within the removed layer."},
      {heading:"Corrective strategy - parameter detail",
-      text:"Interval 3x longer: Waiting 3x the preventive interval means the rail enters the Moderate-to-Critical RCF zone before intervention. At metro r4 base 20 MGT preventive, corrective intervenes at 60 MGT - by which point RCF index may exceed 0.60 and cracks are 3-5 mm deep.\n\nRemoval 0.55 mm/pass, up to 4 passes: Deeper fissures require deeper material removal to reach sound sub-surface metal. A single 0.55 mm pass may not suffice if cracks exceed 1 mm depth, hence up to 4 consecutive passes (2.2 mm total) per intervention.\n\nPost-grinding factor 0.92 (only -8%): After deep corrective grinding, the sub-surface microstructure has been heavily strain-hardened by prolonged ratchetting cycles. This hardened layer provides less geometric benefit than a preventive reprofile, and it will re-crack faster in the next damage cycle."},
+      text:"Tram / metro corrective logic is now condition-based. Standard segments trigger when vertical wear reaches the context threshold (tram 35% of V limit, metro 30%) or when RCF reaches 0.35 / 0.30 respectively. Special zones use a stricter vertical threshold (tram 45%, metro 40%) to avoid over-triggering from local fVExtra alone.\n\nSpecial zones with corrugation risk add a third corrective trigger: mgtSinceLastGrinding >= corrMGT. This keeps corrugation-sensitive areas active even when neither RCF nor vertical wear fully represents the surface defect. If corrugation is the only trigger, the intervention is limited to 1 pass.\n\nRemoval 0.55 mm/pass, up to 4 passes: deeper fissures require deeper material removal to reach sound sub-surface metal. The number of passes still scales with pre-grind RCF severity.\n\nPost-grinding factor 0.92 (only -8%): After deep corrective grinding, the sub-surface microstructure has been heavily strain-hardened by prolonged ratchetting cycles. This hardened layer provides less geometric benefit than a preventive reprofile, and it will re-crack faster in the next damage cycle."},
      {heading:"Grinding reserve consumption comparison",
       text:"The grinding reserve is the total metal available for removal before the rail cross-section falls below the minimum acceptable profile. This is the ultimate constraint on rail life."},
      {table:[["","Preventive","Corrective"],
@@ -1781,7 +1865,7 @@ var HELP=[
    ]
   },
   {id:"reprofiling",title:"Reprofiling Strategy",
-   body:"DEFINITION: Reprofiling restores the full transversal rail profile -- crown (vertical) AND gauge face (lateral). Unlike grinding which targets the crown only, reprofiling removes metal in both V and L directions.\n\nTRIGGER: Geometry-driven, not MGT-scheduled. Initiated when lateral wear reaches the configured threshold (default 60% of lateral limit).\n\nFEASIBILITY CHECK: Reprofiling is only triggered if both vertical and lateral reserves will remain above minimum thresholds after the operation. If either reserve would be exhausted, reprofiling is skipped and replacement follows naturally.\n\nMETAL REMOVAL: reprRemL by radius band (r1=3.0mm, r2=2.0mm, r3=1.0mm, r4=0.5mm, r5=0mm) + reprRemV = reprRemL x 0.30 (Speno TB-2019-04).\n\nGRINDING INTERACTION: Crown restored by reprofiling -- next scheduled grinding pass is skipped (skip-next-grinding toggle, active by default). Post-reprofiling wear factor: 0.70.\n\nPRIORITY RULE: If replacement is triggered in the same year as reprofiling, the reprofiling is discarded -- replacement takes priority. The schedule chart will never show both events in the same year.",
+   body:"DEFINITION: Reprofiling restores the full transversal rail profile -- crown (vertical) AND gauge face (lateral). Unlike grinding which targets the crown only, reprofiling removes metal in both V and L directions.\n\nTRIGGER: Geometry-driven, not MGT-scheduled. Initiated when lateral wear reaches the configured threshold (default 60% of lateral limit).\n\nFEASIBILITY CHECK: Reprofiling is only triggered if both vertical and lateral reserves will remain above minimum thresholds after the operation. If either reserve would be exhausted, reprofiling is skipped and replacement follows naturally.\n\nMETAL REMOVAL: reprRemL by radius band (r1=3.0mm, r2=2.0mm, r3=1.0mm, r4=0.5mm, r5=0mm) + reprRemV = reprRemL x 0.30 (Speno TB-2019-04).\n\nRADIUS RULE: Reprofiling is disabled for all segments and special zones with representative radius >= 800 m, even if the global (non radius-based) mode is selected.\n\nGRINDING INTERACTION: Crown restored by reprofiling -- next scheduled grinding pass is skipped (skip-next-grinding toggle, active by default). Post-reprofiling wear factor: 0.70.\n\nPRIORITY RULE: If replacement is triggered in the same year as reprofiling, the reprofiling is discarded -- replacement takes priority. The schedule chart will never show both events in the same year.",
    links:[
      {label:"Magel E. et al. (2017) - Wheel-Rail Tribology, Elsevier",url:"https://www.elsevier.com/books/wheel-rail-interface-handbook/lewis/978-1-84569-412-8",type:"book"},
      {label:"Speno International TB-2019-04 - Reprofiling metal removal data",url:"https://www.speno.ch/en/services/rail-grinding/",type:"report"},
@@ -1833,7 +1917,7 @@ var HELP=[
    ]
   },
   {id:"limits",title:"Known Limitations",
-   body:"VERSION 1.2 - Annual time step.\n\nNOW MODELLED (v1.2 additions):\n- Reprofiling model: geometry-triggered, radius-based reprRemL, feasibility check, priority rule (replacement overrides same-year reprofiling)\n- reprRemV = reprRemL x 0.30 (calibrated on Speno TB-2019-04)\n- Radius-based reprRemL defaults: r1=3.0mm, r2=2.0mm, r3=1.0mm, r4=0.5mm, r5=0mm (configurable per band)\n- Reserve thresholds configurable via toggle (min V and L, default 3.0-4.0mm by grade)\n- Reprofiling Cost tab with mobilisation\n- Metal reserve chart: dual V and L curves with dynamic reference lines\n- Schedule chart: Grinding / Reprofiling / Replacement bars\n- Strategy Comparison: reprofiling costs in KPIs and tables\n- Summary table: Reprofiling cost column\n\nNOT MODELLED:\n- Inner/outer rail asymmetry: outer rail always critical. Inner ~30-60% of outer rate.\n- Wheel profile evolution over time.\n- Seasonal variation: autumn leaf fall +15-25% wear; winter ice alters friction mode.\n- Switch and crossing wear: different mechanisms, out of scope.\n- Corrugation: short-pitch roughness requires separate dynamic model.\n- Rail inclination / canting effects on contact geometry.\n- Temperature effects on rail steel properties.\n\nSCOPE: Calibrated on European heavy rail (Belgium) and Chinese metro. Validate locally for other contexts.\n\nCOST DATA: Rates based on 2022-2023. Live exchange rates via exchangerate-api.com.",
+   body:"VERSION 1.2 - Annual time step.\n\nNOW MODELLED (v1.2 additions):\n- Reprofiling model: geometry-triggered, radius-based reprRemL, feasibility check, priority rule (replacement overrides same-year reprofiling)\n- reprRemV = reprRemL x 0.30 (calibrated on Speno TB-2019-04)\n- Radius-based reprRemL defaults: r1=3.0mm, r2=2.0mm, r3=1.0mm, r4=0.5mm, r5=0mm (configurable per band)\n- R>=800m reprofiling locked out for both standard segments and special zones\n- Tram / metro corrective grinding: condition-based logic on vertical wear and RCF instead of simple 3x preventive spacing\n- Special-zone corrective logic: optional corrugation trigger using corrMGT, plus debug traces for trigger cause and pre/post values in chart tooltips\n- Reserve thresholds configurable via toggle (min V and L, default 3.0-4.0mm by grade)\n- Reprofiling Cost tab with mobilisation\n- Metal reserve chart: dual V and L curves with dynamic reference lines\n- Schedule chart: Grinding / Reprofiling / Replacement bars\n- Strategy Comparison: reprofiling costs in KPIs and tables\n- Summary table: Reprofiling cost column\n\nNOT MODELLED:\n- Inner/outer rail asymmetry: outer rail always critical. Inner ~30-60% of outer rate.\n- Wheel profile evolution over time.\n- Seasonal variation: autumn leaf fall +15-25% wear; winter ice alters friction mode.\n- Switch and crossing wear: different mechanisms, out of scope.\n- Corrugation remains represented through special-zone triggers, not through an explicit surface roughness state variable.\n- Rail inclination / canting effects on contact geometry.\n- Temperature effects on rail steel properties.\n- Annual time step can still smooth short-term trigger sequencing within a given year.\n\nSCOPE: Calibrated on European heavy rail (Belgium) and Chinese metro. Validate locally for other contexts.\n\nCOST DATA: Rates based on 2022-2023. Live exchange rates via exchangerate-api.com.",
    links:[
      {label:"RSSB T1009 - Rail wear database (UK network)",url:"https://www.rssb.co.uk/research-catalogue/CatalogueItem/T1009",type:"report"},
      {label:"FRA Track Safety Standards (US DOT)",url:"https://railroads.dot.gov/safety/track-safety/track-safety-standards",type:"standard"},
@@ -4965,7 +5049,7 @@ export default function App() {
                         <div>
                           <Lbl>Grinding interval (MGT)</Lbl>
                           <Inp value={z.corrMGT} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{corrMGT:Math.max(1,v)}):x;});});}} min={1} max={50} step={0.5}/>
-                          <div style={{fontSize:10,color:cl.amber,marginTop:3}}>Overrides strategy interval. Preset: {zt.corrMGT} MGT</div>
+                          <div style={{fontSize:10,color:cl.amber,marginTop:3}}>Sets the preventive interval and also adds a corrective corrugation trigger on this special zone. Preset: {zt.corrMGT} MGT</div>
                         </div>
                       )}
                     </div>
@@ -4986,7 +5070,7 @@ export default function App() {
               <Btn onClick={function(){setSt("preventive");}} active={strategy==="preventive"}>Preventive</Btn>
               <Btn onClick={function(){setSt("corrective");}} active={strategy==="corrective"}>Corrective</Btn>
             </div>
-            <div style={{fontSize:12,color:cl.dim,lineHeight:1.6}}>{strategy==="preventive"?"Frequent grinding (short intervals). 1 light pass ~0.2mm. RCF kept low. Maximum rail life.":"Threshold-triggered grinding (3x longer intervals). Up to 4 heavy passes. Shorter rail life."}</div>
+            <div style={{fontSize:12,color:cl.dim,lineHeight:1.6}}>{strategy==="preventive"?"Frequent grinding (short intervals). 1 light pass ~0.2mm. RCF kept low. Maximum rail life.":"Condition-based corrective grinding. Tram/metro trigger on vertical wear and/or RCF; heavy rail also uses band-based early RCF triggers. Up to 4 heavy passes depending on severity."}</div>
             <div style={{marginTop:12}}><Lbl>Simulation horizon (years)</Lbl><Inp value={horizon} onChange={setHz} min={5} max={50}/></div>
           </Card>
         </div>
