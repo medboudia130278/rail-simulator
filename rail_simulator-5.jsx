@@ -2568,6 +2568,19 @@ function ComparePanel(props) {
   const [cmpParamsHash, setCmpHash] = useState(null);
   const [kpiView,    setKpiView]= useState("first"); // "first" or "full"
 
+  var prevView = useMemo(function(){
+    return applyReplacementYearMaintenanceOverrides(prevResult, {
+      ignoreGrind: props.ignoreSameYearGrinding,
+      ignoreRepr: props.ignoreSameYearReprofiling,
+    });
+  }, [prevResult, props.ignoreSameYearGrinding, props.ignoreSameYearReprofiling]);
+  var corrView = useMemo(function(){
+    return applyReplacementYearMaintenanceOverrides(corrResult, {
+      ignoreGrind: props.ignoreSameYearGrinding,
+      ignoreRepr: props.ignoreSameYearReprofiling,
+    });
+  }, [corrResult, props.ignoreSameYearGrinding, props.ignoreSameYearReprofiling]);
+
   // Hash excludes strategy  - comparison always runs both regardless
   var paramsHash = params ? JSON.stringify({
     context:      params.context,
@@ -2596,7 +2609,7 @@ function ComparePanel(props) {
     customLimL:      params.customLimL,
   }) : null;
   var isStale      = (prevResult||corrResult) && cmpParamsHash && paramsHash && cmpParamsHash !== paramsHash;
-  var hasComparison = !!(prevResult && corrResult);
+  var hasComparison = !!(prevView && corrView);
 
   function runComparison() {
     if (!params) return;
@@ -2626,8 +2639,8 @@ function ComparePanel(props) {
   }
 
   // Per-segment data  - always prev vs corr
-  var segData = hasComparison ? prevResult.results.map(function(pr, i) {
-    var cr = corrResult.results[i];
+  var segData = hasComparison ? prevView.results.map(function(pr, i) {
+    var cr = corrView.results[i];
     if (!cr) return null;
     var pPasses    = pr.data ? pr.data.reduce(function(a,d){return a+d.ground;},0) : 0;
     var cPasses    = cr.data ? cr.data.reduce(function(a,d){return a+d.ground;},0) : 0;
@@ -2689,8 +2702,8 @@ function ComparePanel(props) {
   var fhTotalSaving = fhTotalCorr - fhTotalPrev;
   var fhTotalReplsP = fullHorizonData.reduce(function(a,r){return a+r.pRepls;},0);
   var fhTotalReplsC = fullHorizonData.reduce(function(a,r){return a+r.cRepls;},0);
-  var prevRepls   = hasComparison ? prevResult.results.filter(function(r){return r.repY;}).length : 0;
-  var corrRepls   = hasComparison ? corrResult.results.filter(function(r){return r.repY;}).length : 0;
+  var prevRepls   = hasComparison ? prevView.results.filter(function(r){return r.repY;}).length : 0;
+  var corrRepls   = hasComparison ? corrView.results.filter(function(r){return r.repY;}).length : 0;
 
   var asr     = segData[aidx];
   var prevSeg = asr && asr.prevData;
@@ -2944,7 +2957,9 @@ function ComparePanel(props) {
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                     <thead>
                       <tr style={{background:"rgba(255,255,255,0.03)"}}>
-                        {["Segment","Repl.yr PREV","Repl.yr CORR","Delta yr","Passes PREV","Passes CORR","Grind PREV","Grind CORR","Repl PREV","Repl CORR","Repr PREV","Repr CORR","Total PREV","Total CORR","Saving"].map(function(h){
+                        {["Segment","Repl.yr PREV","Repl.yr CORR","Delta yr","Passes PREV","Passes CORR","Grind PREV","Grind CORR","Repl PREV","Repl CORR"]
+                          .concat(props.reprActive?["Repr PREV","Repr CORR"]:[])
+                          .concat(["Total PREV","Total CORR","Saving"]).map(function(h){
                           return <th key={h} style={{padding:"7px 10px",textAlign:"left",color:cl.dim,fontWeight:600,whiteSpace:"nowrap",fontSize:10}}>{h}</th>;
                         })}
                       </tr>
@@ -2976,7 +2991,7 @@ function ComparePanel(props) {
                     </tbody>
                     <tfoot>
                       <tr style={{borderTop:"2px solid rgba(125,211,200,0.2)",background:"rgba(125,211,200,0.04)"}}>
-                        <td colSpan={10} style={{padding:"9px 10px",color:cl.teal,fontWeight:700,fontSize:12}}>TOTAL (first cycle)</td>
+                        <td colSpan={props.reprActive?10:10} style={{padding:"9px 10px",color:cl.teal,fontWeight:700,fontSize:12}}>TOTAL (first cycle)</td>
                         {props.reprActive&&<td style={{padding:"9px 10px",fontFamily:"monospace",color:cl.teal,fontWeight:700}}>{fmt(segData.reduce(function(a,s){return a+(s.pReprCost||0);},0))}</td>}
                         {props.reprActive&&<td style={{padding:"9px 10px",fontFamily:"monospace",color:cl.amber,fontWeight:700}}>{fmt(segData.reduce(function(a,s){return a+(s.cReprCost||0);},0))}</td>}
                         <td style={{padding:"9px 10px",fontFamily:"monospace",color:cl.teal,fontWeight:800}}>{fmt(totalPrev)}</td>
@@ -3081,7 +3096,9 @@ function ComparePanel(props) {
                         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                           <thead>
                             <tr style={{background:"rgba(0,0,0,0.3)"}}>
-                              {["Segment","Repls PREV","Repls CORR","Passes PREV","Passes CORR","Grind PREV","Grind CORR","Repl PREV","Repl CORR","Repr PREV","Repr CORR","Total PREV","Total CORR","Saving "+horizon+"yr"].map(function(h){
+                              {["Segment","Repls PREV","Repls CORR","Passes PREV","Passes CORR","Grind PREV","Grind CORR","Repl PREV","Repl CORR"]
+                                .concat(props.reprActive?["Repr PREV","Repr CORR"]:[])
+                                .concat(["Total PREV","Total CORR","Saving "+horizon+"yr"]).map(function(h){
                                 return <th key={h} style={{padding:"7px 10px",textAlign:"left",color:cl.teal,fontWeight:600,whiteSpace:"nowrap",fontSize:10}}>{h}</th>;
                               })}
                             </tr>
@@ -3475,6 +3492,38 @@ function getRate(code, liveRates, customRates, customCurrencyMeta) {
   return (CURRENCIES[code]||{rate:1}).rate;
 }
 
+function applyReplacementYearMaintenanceOverrides(simResult, opts) {
+  if(!simResult || !simResult.results) return simResult;
+  var ignoreGrind = !!(opts && opts.ignoreGrind);
+  var ignoreRepr  = !!(opts && opts.ignoreRepr);
+  if(!ignoreGrind && !ignoreRepr) return simResult;
+  return Object.assign({}, simResult, {
+    results: simResult.results.map(function(r){
+      var data = (r.data || []).map(function(d){
+        var sameYearReplacement = !!d.repl;
+        var nextGround = (ignoreGrind && sameYearReplacement) ? 0 : (d.ground || 0);
+        var nextRepr   = (ignoreRepr  && sameYearReplacement) ? 0 : (d.reprofiled || 0);
+        if(nextGround === (d.ground||0) && nextRepr === (d.reprofiled||0)) return d;
+        var next = Object.assign({}, d, {ground: nextGround, reprofiled: nextRepr});
+        if(ignoreGrind && sameYearReplacement && (d.ground||0)) {
+          next.grindCause = null;
+          next.grindPasses = 0;
+          next.preGrindRCF = null;
+          next.postGrindRCF = null;
+          next.preGrindWearV = null;
+          next.postGrindWearV = null;
+        }
+        return next;
+      });
+      return Object.assign({}, r, {
+        data: data,
+        gCount: ignoreGrind ? data.reduce(function(a,d){return a + (d.ground || 0);}, 0) : r.gCount,
+        reprCount: ignoreRepr ? data.reduce(function(a,d){return a + (d.reprofiled || 0);}, 0) : (r.reprCount || 0),
+      });
+    })
+  });
+}
+
 export default function App() {
   // --- Auth ---
   const [authed,   setAuthed]  = useState(false);
@@ -3566,6 +3615,8 @@ export default function App() {
   const [initCond, setIC]   = useState({r1:{wearV:0,wearL:0,rcf:0,mgt:0},r2:{wearV:0,wearL:0,rcf:0,mgt:0},r3:{wearV:0,wearL:0,rcf:0,mgt:0},r4:{wearV:0,wearL:0,rcf:0,mgt:0},r5:{wearV:0,wearL:0,rcf:0,mgt:0}});
   const [specialZones, setSpZ] = useState([]);
   const [result,   setRes]  = useState(null);
+  const [ignoreReplYearGrinding, setIgnoreReplYearGrinding] = useState(false);
+  const [ignoreReplYearReprofiling, setIgnoreReplYearReprofiling] = useState(false);
   const [aidx,     setAi]   = useState(0);
   const [ctab,     setCt]   = useState("wear");
   const [hasRun,   setHR]   = useState(false);
@@ -3757,8 +3808,15 @@ export default function App() {
     return c.total;
   }
 
+  var viewResult = useMemo(function(){
+    return applyReplacementYearMaintenanceOverrides(result, {
+      ignoreGrind: ignoreReplYearGrinding,
+      ignoreRepr: ignoreReplYearReprofiling,
+    });
+  }, [result, ignoreReplYearGrinding, ignoreReplYearReprofiling]);
+
   var tampSummaryById = useMemo(function(){
-    if(trackMode!=="ballast" || !result || !result.results) return {};
+    if(trackMode!=="ballast" || !viewResult || !viewResult.results) return {};
     var fx = (currencyMap[sharedCurrency]||currencyMap.EUR||CURRENCIES.EUR).rate;
     var machine = TAMP_MACHINES_BOUR[tcMachineKey] || TAMP_MACHINES_BOUR.standard;
     var ownOverrides = tcMode==="owned" && tcOwnManual ? {
@@ -3779,7 +3837,7 @@ export default function App() {
     var ctx = context==="tram"?"tram":context==="heavy"?"heavy":"metro";
     var fp = TAMP_PLATFORM[tPlatform] || 1.0;
     var out = {};
-    result.results.forEach(function(r){
+    viewResult.results.forEach(function(r){
       var seg = r.seg;
       var band = TAMP_BAND(seg.repr || seg.radius || 300);
       var baseInt = (TAMP_BASE_MGT[ctx]||TAMP_BASE_MGT.metro)[band] || 25;
@@ -3811,7 +3869,7 @@ export default function App() {
       };
     });
     return out;
-  }, [trackMode,result,currencyMap,sharedCurrency,tcMachineKey,tcMode,tcRegion,tcNight,tcBallastPxOv,tcCOpPerMl,tcCMobilFix,tcCDegarnMl,tcOwnManual,tcOwnFuelLph,tcOwnGasoil,tcOwnMaintH,tcOwnLabourH,tcOwnProdMlH,context,tPlatform,speed,horizon,tDegCycles,tAppoint]);
+  }, [trackMode,viewResult,currencyMap,sharedCurrency,tcMachineKey,tcMode,tcRegion,tcNight,tcBallastPxOv,tcCOpPerMl,tcCMobilFix,tcCDegarnMl,tcOwnManual,tcOwnFuelLph,tcOwnGasoil,tcOwnMaintH,tcOwnLabourH,tcOwnProdMlH,context,tPlatform,speed,horizon,tDegCycles,tAppoint]);
 
   var run=useCallback(function(){
     var active=segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){
@@ -3836,7 +3894,7 @@ export default function App() {
     catch(e){setErr("Simulation error: "+e.message);}
   },[context,trains,segs,strategy,railType,trackMode,speed,lubr,horizon,isBF,initCond,specialZones,customLimActive,customLimV,customLimL,reprActive,reprThresh,reprRemL,reprRemV,reprRcfR,reprSkip,reprRadiusBased,reprRemLByBand,customResActive,customMinRes]);
 
-  var asr=result&&result.results[aidx];
+  var asr=viewResult&&viewResult.results[aidx];
   var gp={railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,strategy:strategy};
 
   function generatePDF() {
@@ -5084,16 +5142,34 @@ export default function App() {
               <Btn onClick={run} active={true}>Run Simulation</Btn>
             </div>
           )}
-          {hasRun&&result&&(
+          {hasRun&&viewResult&&(
             <div>
               <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
-                <Kpi label="Gross MGT / yr"  value={result.mgtPY.toFixed(2)}  unit="MGT"/>
-                <Kpi label="Equiv. MGT / yr" value={result.eqPY.toFixed(2)}   unit="MGT eq."/>
-                <Kpi label="Earliest replacement" value={Math.min.apply(null,result.results.map(function(r){return r.repY||horizon+1;}))<=horizon?"Yr "+Math.min.apply(null,result.results.map(function(r){return r.repY||horizon+1;})):"> "+horizon+" yrs"} unit="" warn={Math.min.apply(null,result.results.map(function(r){return r.repY||horizon+1;}))<=horizon*0.5}/>
-                <Kpi label="Total grindings" value={result.results.reduce(function(a,r){return a+r.gCount;},0)} unit="passes"/>{reprActive&&<Kpi label="Total reprofiling" value={result.results.reduce(function(a,r){return a+(r.reprCount||0);},0)} unit="interventions" warn={true}/>}
+                <Kpi label="Gross MGT / yr"  value={viewResult.mgtPY.toFixed(2)}  unit="MGT"/>
+                <Kpi label="Equiv. MGT / yr" value={viewResult.eqPY.toFixed(2)}   unit="MGT eq."/>
+                <Kpi label="Earliest replacement" value={Math.min.apply(null,viewResult.results.map(function(r){return r.repY||horizon+1;}))<=horizon?"Yr "+Math.min.apply(null,viewResult.results.map(function(r){return r.repY||horizon+1;})):"> "+horizon+" yrs"} unit="" warn={Math.min.apply(null,viewResult.results.map(function(r){return r.repY||horizon+1;}))<=horizon*0.5}/>
+                <Kpi label="Total grindings" value={viewResult.results.reduce(function(a,r){return a+r.gCount;},0)} unit="passes"/>{reprActive&&<Kpi label="Total reprofiling" value={viewResult.results.reduce(function(a,r){return a+(r.reprCount||0);},0)} unit="interventions" warn={true}/>}
+              </div>
+              <div style={{display:"flex",gap:10,alignItems:"flex-start",marginBottom:14,padding:"10px 12px",background:"rgba(255,255,255,0.03)",borderRadius:8,border:"1px solid rgba(125,211,200,0.1)",flexWrap:"wrap"}}>
+                <div style={{fontSize:11,color:cl.dim,minWidth:210,lineHeight:1.6}}>
+                  Replacement-year overrides:
+                  <div style={{fontSize:10,color:"#4a6a74"}}>Hide same-year maintenance from displayed counts, costs and summaries without changing the raw simulation engine.</div>
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div onClick={function(){setIgnoreReplYearGrinding(function(v){return !v;});}} style={{width:28,height:16,borderRadius:8,background:ignoreReplYearGrinding?cl.teal:"rgba(255,255,255,0.1)",position:"relative",cursor:"pointer",border:"1px solid "+(ignoreReplYearGrinding?cl.teal:"rgba(255,255,255,0.2)")}}>
+                    <div style={{width:10,height:10,borderRadius:"50%",background:"#fff",position:"absolute",top:2,left:ignoreReplYearGrinding?14:2}}/>
+                  </div>
+                  <div style={{fontSize:11,color:ignoreReplYearGrinding?cl.teal:cl.dim}}>Ignore grinding on replacement year</div>
+                </div>
+                {reprActive&&<div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <div onClick={function(){setIgnoreReplYearReprofiling(function(v){return !v;});}} style={{width:28,height:16,borderRadius:8,background:ignoreReplYearReprofiling?cl.teal:"rgba(255,255,255,0.1)",position:"relative",cursor:"pointer",border:"1px solid "+(ignoreReplYearReprofiling?cl.teal:"rgba(255,255,255,0.2)")}}>
+                    <div style={{width:10,height:10,borderRadius:"50%",background:"#fff",position:"absolute",top:2,left:ignoreReplYearReprofiling?14:2}}/>
+                  </div>
+                  <div style={{fontSize:11,color:ignoreReplYearReprofiling?cl.teal:cl.dim}}>Ignore reprofiling on replacement year</div>
+                </div>}
               </div>
               <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
-                {result.results.map(function(r,i){return <Btn key={i} onClick={function(){setAi(i);}} active={aidx===i} sm={true}>{r.seg.label}{r.repY?" Yr "+r.repY:""}</Btn>;})}
+                {viewResult.results.map(function(r,i){return <Btn key={i} onClick={function(){setAi(i);}} active={aidx===i} sm={true}>{r.seg.label}{r.repY?" Yr "+r.repY:""}</Btn>;})}
               </div>
               {asr&&(
                 <div>
@@ -5186,8 +5262,8 @@ export default function App() {
                         </ResponsiveContainer>
                       </div>
                     )}
-                    {ctab==="cost"&&<CostPanel simResult={result} horizon={horizon} initRegion={replRegion} initOvhdPct={replOvhdPct} initWeldType={replWeldType} initJointSp={replJointSp} initCurrency={sharedCurrency} onCurrencyChange={setSharedCur} ratesStatus={ratesStatus} onShowRates={function(){setShowRatesPop(true);}} currencyMap={currencyMap} currencyOptions={currencyOptions} onParamsChange={function(p){if(p.region!==undefined)setReplRegion(p.region);if(p.ovhdPct!==undefined)setReplOvhd(p.ovhdPct);if(p.weldType!==undefined)setReplWeld(p.weldType);if(p.jointSp!==undefined)setReplJoint(p.jointSp);if(p.customP!==undefined)setReplCustomP(p.customP);}}/>}
-                    {ctab==="grind"&&<GrindPanel simResult={result} horizon={horizon} context={context} initMachine={grindMachine} initMode={grindMode} initRegion={grindRegion} initNight={grindNight} initDist={grindDistKm} initCurrency={sharedCurrency} onCurrencyChange={setSharedCur} ratesStatus={ratesStatus} onShowRates={function(){setShowRatesPop(true);}} currencyMap={currencyMap} currencyOptions={currencyOptions} onParamsChange={function(p){
+                    {ctab==="cost"&&<CostPanel simResult={viewResult} horizon={horizon} initRegion={replRegion} initOvhdPct={replOvhdPct} initWeldType={replWeldType} initJointSp={replJointSp} initCurrency={sharedCurrency} onCurrencyChange={setSharedCur} ratesStatus={ratesStatus} onShowRates={function(){setShowRatesPop(true);}} currencyMap={currencyMap} currencyOptions={currencyOptions} onParamsChange={function(p){if(p.region!==undefined)setReplRegion(p.region);if(p.ovhdPct!==undefined)setReplOvhd(p.ovhdPct);if(p.weldType!==undefined)setReplWeld(p.weldType);if(p.jointSp!==undefined)setReplJoint(p.jointSp);if(p.customP!==undefined)setReplCustomP(p.customP);}}/>}
+                    {ctab==="grind"&&<GrindPanel simResult={viewResult} horizon={horizon} context={context} initMachine={grindMachine} initMode={grindMode} initRegion={grindRegion} initNight={grindNight} initDist={grindDistKm} initCurrency={sharedCurrency} onCurrencyChange={setSharedCur} ratesStatus={ratesStatus} onShowRates={function(){setShowRatesPop(true);}} currencyMap={currencyMap} currencyOptions={currencyOptions} onParamsChange={function(p){
                       setGMachine(p.machineKey); setGMode(p.mode); setGRegion(p.region);
                       setGNight(p.nightHrs); setGDist(p.distKm);
                       if(p.mobilPerInt!==undefined) setGMobil(p.mobilPerInt);
@@ -5196,14 +5272,14 @@ export default function App() {
                       setGCMF(p.cMobilFix !== undefined ? p.cMobilFix : null);
                       setGCMK(p.cMobilKm  !== undefined ? p.cMobilKm  : null);
                     }}/>}
-                    {ctab==="repr"&&<ReprofilingCostPanel simResult={result} horizon={horizon} context={context} initMachine={grindMachine} initRegion={grindRegion} initCurrency={sharedCurrency} onCurrencyChange={setSharedCur} ratesStatus={ratesStatus} onShowRates={function(){setShowRatesPop(true);}} currencyMap={currencyMap} currencyOptions={currencyOptions} reprActive={reprActive}/>}
-                     {ctab==="tamp"&&trackMode==="ballast"&&result&&<BallastPanel segs={result.results.map(function(r){return r.seg;})} result={result} horizon={horizon} context={context} globalSpeed={speed} platform={tPlatform} onPlatformChange={setTPlatform} appoint={tAppoint} onAppointChange={setTAppoint} degCycles={tDegCycles} onDegCyclesChange={setTDegCycles} ballastDens={tBallastDens} onBallastDensChange={setTBallastDens} aidx={aidx} onSegSelect={setAi}/>}
-                    {ctab==="tamp"&&trackMode==="ballast"&&!result&&<div style={{padding:40,textAlign:"center",color:"#6b9ea8",fontSize:13}}>Run the simulation first to see the tamping schedule.</div>}
+                    {ctab==="repr"&&<ReprofilingCostPanel simResult={viewResult} horizon={horizon} context={context} initMachine={grindMachine} initRegion={grindRegion} initCurrency={sharedCurrency} onCurrencyChange={setSharedCur} ratesStatus={ratesStatus} onShowRates={function(){setShowRatesPop(true);}} currencyMap={currencyMap} currencyOptions={currencyOptions} reprActive={reprActive}/>}
+                     {ctab==="tamp"&&trackMode==="ballast"&&viewResult&&<BallastPanel segs={viewResult.results.map(function(r){return r.seg;})} result={viewResult} horizon={horizon} context={context} globalSpeed={speed} platform={tPlatform} onPlatformChange={setTPlatform} appoint={tAppoint} onAppointChange={setTAppoint} degCycles={tDegCycles} onDegCyclesChange={setTDegCycles} ballastDens={tBallastDens} onBallastDensChange={setTBallastDens} aidx={aidx} onSegSelect={setAi}/>}
+                    {ctab==="tamp"&&trackMode==="ballast"&&!viewResult&&<div style={{padding:40,textAlign:"center",color:"#6b9ea8",fontSize:13}}>Run the simulation first to see the tamping schedule.</div>}
                     {ctab==="tamp"&&trackMode!=="ballast"&&<div style={{padding:40,textAlign:"center",color:"#fbbf24",fontSize:13}}>Ballast Tamping is only available for ballast track.</div>}
-                    {ctab==="tcost"&&trackMode==="ballast"&&result&&<TampingCostPanel segs={result.results.map(function(r){return r.seg;})} result={result} horizon={horizon} context={context} platform={tPlatform} appoint={tAppoint} degCycles={tDegCycles} globalSpeed={speed} currencyMap={currencyMap} currency={sharedCurrency} initMachine={tcMachineKey} initMode={tcMode} initRegion={tcRegion} initNight={tcNight} initBallastPxOv={tcBallastPxOv} initCOpPerMl={tcCOpPerMl} initCMobilFix={tcCMobilFix} initCDegarnMl={tcCDegarnMl} initOwnManual={tcOwnManual} initOwnFuelLph={tcOwnFuelLph} initOwnGasoil={tcOwnGasoil} initOwnMaintH={tcOwnMaintH} initOwnLabourH={tcOwnLabourH} initOwnProdMlH={tcOwnProdMlH} onParamsChange={function(p){ if(p.machineKey!==undefined) setTCMachine(p.machineKey); if(p.mode!==undefined) setTCMode(p.mode); if(p.region!==undefined) setTCRegion(p.region); if(p.nightHrs!==undefined) setTCNight(p.nightHrs); if(p.ballastPxOv!==undefined) setTCBallPx(p.ballastPxOv); if(p.cOpPerMl!==undefined) setTCCOp(p.cOpPerMl); if(p.cMobilFix!==undefined) setTCCMF(p.cMobilFix); if(p.cDegarnMl!==undefined) setTCCDeg(p.cDegarnMl); if(p.ownManual!==undefined) setTCOwnManual(p.ownManual); if(p.ownFuelLph!==undefined) setTCOwnFuel(p.ownFuelLph); if(p.ownGasoil!==undefined) setTCOwnGasoil(p.ownGasoil); if(p.ownMaintH!==undefined) setTCOwnMaint(p.ownMaintH); if(p.ownLabourH!==undefined) setTCOwnLab(p.ownLabourH); if(p.ownProdMlH!==undefined) setTCOwnProd(p.ownProdMlH); }}/>}
-                    {ctab==="tcost"&&trackMode==="ballast"&&!result&&<div style={{padding:40,textAlign:"center",color:"#6b9ea8",fontSize:13}}>Run the simulation first to see tamping costs.</div>}
+                    {ctab==="tcost"&&trackMode==="ballast"&&viewResult&&<TampingCostPanel segs={viewResult.results.map(function(r){return r.seg;})} result={viewResult} horizon={horizon} context={context} platform={tPlatform} appoint={tAppoint} degCycles={tDegCycles} globalSpeed={speed} currencyMap={currencyMap} currency={sharedCurrency} initMachine={tcMachineKey} initMode={tcMode} initRegion={tcRegion} initNight={tcNight} initBallastPxOv={tcBallastPxOv} initCOpPerMl={tcCOpPerMl} initCMobilFix={tcCMobilFix} initCDegarnMl={tcCDegarnMl} initOwnManual={tcOwnManual} initOwnFuelLph={tcOwnFuelLph} initOwnGasoil={tcOwnGasoil} initOwnMaintH={tcOwnMaintH} initOwnLabourH={tcOwnLabourH} initOwnProdMlH={tcOwnProdMlH} onParamsChange={function(p){ if(p.machineKey!==undefined) setTCMachine(p.machineKey); if(p.mode!==undefined) setTCMode(p.mode); if(p.region!==undefined) setTCRegion(p.region); if(p.nightHrs!==undefined) setTCNight(p.nightHrs); if(p.ballastPxOv!==undefined) setTCBallPx(p.ballastPxOv); if(p.cOpPerMl!==undefined) setTCCOp(p.cOpPerMl); if(p.cMobilFix!==undefined) setTCCMF(p.cMobilFix); if(p.cDegarnMl!==undefined) setTCCDeg(p.cDegarnMl); if(p.ownManual!==undefined) setTCOwnManual(p.ownManual); if(p.ownFuelLph!==undefined) setTCOwnFuel(p.ownFuelLph); if(p.ownGasoil!==undefined) setTCOwnGasoil(p.ownGasoil); if(p.ownMaintH!==undefined) setTCOwnMaint(p.ownMaintH); if(p.ownLabourH!==undefined) setTCOwnLab(p.ownLabourH); if(p.ownProdMlH!==undefined) setTCOwnProd(p.ownProdMlH); }}/>}
+                    {ctab==="tcost"&&trackMode==="ballast"&&!viewResult&&<div style={{padding:40,textAlign:"center",color:"#6b9ea8",fontSize:13}}>Run the simulation first to see tamping costs.</div>}
                     {ctab==="tcost"&&trackMode!=="ballast"&&<div style={{padding:40,textAlign:"center",color:"#fbbf24",fontSize:13}}>Tamping Cost is only available for ballast track.</div>}
-                    {ctab==="cmp"&&<ComparePanel simResult={result} horizon={horizon} context={context} params={{context:context,trains:trains,segments:segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){var b=Object.assign({},s,{radius:s.repr,railGrade:s.grade});if(isBF&&initCond[s.id]){var ic=initCond[s.id];b.initWearV=ic.wearV||0;b.initWearL=ic.wearL||0;b.initRCF=ic.rcf||0;b.initMGT=ic.mgt||0;}return b;}).concat(specialZones.filter(function(z){return z.lengthM>0;}).map(function(z){return {id:z.id,label:z.name,radius:z.radius||9000,railGrade:z.grade||"R260",lengthKm:z.lengthM/1000,speed:z.speed||speed,fVExtra:z.fVExtra,corrugationMGT:z.corrugation?z.corrMGT:null,isSpecialZone:true,zoneType:z.type};})),strategy:strategy,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon,customLimV:customLimActive?customLimV:null,customLimL:customLimActive?customLimL:null,customResActive:customResActive,customMinRes:customMinRes}} grindEurPerMl={liveGrindRate} replEurPerMl={liveReplRate} grindCostParams={liveGrindCost} calcReplRate={calcReplRateForGrade} currency={sharedCurrency} currencyMap={currencyMap} reprActive={reprActive} reprThresh={reprThresh} reprRemL={reprRemL} reprRemV={reprRemV} reprRcfR={reprRcfR} reprSkip={reprSkip} reprRadiusBased={reprRadiusBased} reprRemLByBand={reprRemLByBand} liveReprRate={liveReprRate} liveReprMobil={liveReprMobil}/>}
+                    {ctab==="cmp"&&<ComparePanel simResult={viewResult} horizon={horizon} context={context} params={{context:context,trains:trains,segments:segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){var b=Object.assign({},s,{radius:s.repr,railGrade:s.grade});if(isBF&&initCond[s.id]){var ic=initCond[s.id];b.initWearV=ic.wearV||0;b.initWearL=ic.wearL||0;b.initRCF=ic.rcf||0;b.initMGT=ic.mgt||0;}return b;}).concat(specialZones.filter(function(z){return z.lengthM>0;}).map(function(z){return {id:z.id,label:z.name,radius:z.radius||9000,railGrade:z.grade||"R260",lengthKm:z.lengthM/1000,speed:z.speed||speed,fVExtra:z.fVExtra,corrugationMGT:z.corrugation?z.corrMGT:null,isSpecialZone:true,zoneType:z.type};})),strategy:strategy,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon,customLimV:customLimActive?customLimV:null,customLimL:customLimActive?customLimL:null,customResActive:customResActive,customMinRes:customMinRes}} grindEurPerMl={liveGrindRate} replEurPerMl={liveReplRate} grindCostParams={liveGrindCost} calcReplRate={calcReplRateForGrade} currency={sharedCurrency} currencyMap={currencyMap} reprActive={reprActive} reprThresh={reprThresh} reprRemL={reprRemL} reprRemV={reprRemV} reprRcfR={reprRcfR} reprSkip={reprSkip} reprRadiusBased={reprRadiusBased} reprRemLByBand={reprRemLByBand} liveReprRate={liveReprRate} liveReprMobil={liveReprMobil} ignoreSameYearGrinding={ignoreReplYearGrinding} ignoreSameYearReprofiling={ignoreReplYearReprofiling}/>}
                   </div>
                   <div style={{background:"rgba(0,0,0,0.15)",borderRadius:10,border:"1px solid rgba(125,211,200,0.08)",overflow:"hidden"}}>
                     <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)",fontSize:11,letterSpacing:2,color:cl.teal,textTransform:"uppercase",fontWeight:700}}>Summary - All Segments</div>
@@ -5211,7 +5287,7 @@ export default function App() {
                       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                         <thead><tr style={{background:"rgba(255,255,255,0.03)"}}>{["Segment","Radius","Grade","Eff.Hardness","Wear rate V","Wear rate L","Grindings","Tamping","Degarnissage","Reprofiling","Replacement","Final RCF"].map(function(h){return <th key={h} style={{padding:"8px 12px",textAlign:"left",color:cl.dim,fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>;})}</tr></thead>
                         <tbody>
-                          {result.results.map(function(r,i){var last=r.data[r.data.length-1]; var tsm=tampSummaryById[r.seg.id]; return(
+                          {viewResult.results.map(function(r,i){var last=r.data[r.data.length-1]; var tsm=tampSummaryById[r.seg.id]; return(
                             <tr key={i} onClick={function(){setAi(i);}} style={{borderTop:"1px solid rgba(255,255,255,0.04)",cursor:"pointer",background:aidx===i?"rgba(125,211,200,0.05)":"transparent"}}>
                               <td style={{padding:"8px 12px",color:"#e8f4f3",fontWeight:500}}>{r.seg.label}</td>
                               <td style={{padding:"8px 12px",fontFamily:"monospace"}}>{r.seg.radius>=9000?"tangent":r.seg.radius+"m"}</td>
@@ -5242,7 +5318,7 @@ export default function App() {
                       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                         <thead><tr style={{background:"rgba(0,0,0,0.2)"}}>{["Segment","Grade","Replacements","Total grindings","Grind cost","Repl. cost","Reprofiling cost","Tamping / Degarn. cost","Lifecycle total"].map(function(h){return <th key={h} style={{padding:"8px 12px",textAlign:"left",color:cl.teal,fontWeight:600,fontSize:10,letterSpacing:1}}>{h}</th>;})}</tr></thead>
                         <tbody>
-                          {result.results.map(function(r,i){
+                          {viewResult.results.map(function(r,i){
                             var lenMl=(r.seg.lengthKm||0)*1000;
                             var passes=r.data?r.data.reduce(function(a,d){return a+d.ground;},0):0;
                             var grade=r.seg.grade||r.seg.railGrade||"R260";
@@ -5284,7 +5360,7 @@ export default function App() {
                               var tR=0,tP=0,tG=0,tRp=0,tRepr=0,tTamp=0,tT=0;
                               var gFx2=(currencyMap[sharedCurrency]||currencyMap.EUR||CURRENCIES.EUR).rate;
                               var gSym2=(currencyMap[sharedCurrency]||currencyMap.EUR||CURRENCIES.EUR).symbol;
-                              result.results.forEach(function(r){
+                              viewResult.results.forEach(function(r){
                                 var lenMl=(r.seg.lengthKm||0)*1000;
                                 var passes=r.data?r.data.reduce(function(a,d){return a+d.ground;},0):0;
                                 var grade=r.seg.grade||r.seg.railGrade||"R260";
