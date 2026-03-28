@@ -20,6 +20,20 @@ var TRACK_MODES = {
   slab:    { label:"Concrete Slab Track",   f_v:1.10, f_l:1.15 },
   embedded:{ label:"Embedded Track (Tram)", f_v:1.15, f_l:1.20 },
 };
+var RAIL_PROFILES = {
+  vignole: {
+    "49E1": { label:"49E1 (S49)", standard:"EN 13674-1", massKgM:49.39, limitV:8,  limitL:9,  reserveV:13, reserveL:7, minResV:3.0, minResL:3.0, contexts:["tram","metro"] },
+    "54E1": { label:"54E1 (UIC54)", standard:"EN 13674-1", massKgM:54.77, limitV:9,  limitL:11, reserveV:15, reserveL:8, minResV:3.0, minResL:3.0, contexts:["tram","metro","heavy"] },
+    "54E5": { label:"54E5 (54E1AHC)", standard:"EN 13674-1", massKgM:54.77, limitV:9,  limitL:10, reserveV:15, reserveL:8, minResV:3.0, minResL:3.0, contexts:["metro","heavy"] },
+    "60E1": { label:"60E1 (UIC60)", standard:"EN 13674-1", massKgM:60.21, limitV:11, limitL:13, reserveV:17, reserveL:9, minResV:3.5, minResL:3.5, contexts:["metro","heavy"] },
+  },
+  groove: {
+    "54G2": { label:"54G2 (Ri54G2)", standard:"EN 14811", massKgM:54.55, limitV:7, limitL:8, reserveV:12, reserveL:6, minResV:3.0, minResL:3.0, contexts:["tram","metro"] },
+    "55G3": { label:"55G3 (41GP13)", standard:"EN 14811", massKgM:55.27, limitV:7, limitL:8, reserveV:12, reserveL:6, minResV:3.0, minResL:3.0, contexts:["tram","metro"] },
+    "59R2": { label:"59R2 (Ri59N)", standard:"EN 14811", massKgM:58.14, limitV:8, limitL:9, reserveV:13, reserveL:7, minResV:3.0, minResL:3.0, contexts:["tram","metro"] },
+    "60R2": { label:"60R2 (Ri60N)", standard:"EN 14811", massKgM:59.75, limitV:8, limitL:9, reserveV:13, reserveL:7, minResV:3.0, minResL:3.0, contexts:["tram","metro"] },
+  }
+};
 var CONTEXTS = {
   tram: { label:"Tram",        qRef:10,   baseWearV:0.82, baseWearL:1.00, rcfRate:[0.002,0.010,0.018,0.012,0.004] },
   metro:{ label:"Metro / LRT", qRef:15,   baseWearV:0.82, baseWearL:1.00, rcfRate:[0.002,0.010,0.016,0.010,0.003] },
@@ -116,6 +130,61 @@ var RESERVE   = { R200:13,  R260:15,  R320Cr:16,  R350HT:17,  R400HT:18  }; // v
 var RESERVE_L = { R200:7,   R260:8,   R320Cr:9,   R350HT:9,   R400HT:10  }; // lateral grinding reserve (mm) - gauge face
 var MIN_RES_V = { R200:3.0, R260:3.0, R320Cr:3.0, R350HT:3.5, R400HT:4.0 }; // min vertical reserve before replacement
 var MIN_RES_L = { R200:3.0, R260:3.0, R320Cr:3.5, R350HT:3.5, R400HT:4.0 }; // min lateral reserve before replacement
+function getDefaultRailProfileForType(railType, context) {
+  if(railType==="groove") return "60R2";
+  if(context==="heavy") return "60E1";
+  if(context==="tram") return "49E1";
+  return "54E1";
+}
+function getRailProfileEntries(railType) {
+  return RAIL_PROFILES[railType] || {};
+}
+function isRailProfileAllowed(railType, profileKey, context) {
+  var p = getRailProfileEntries(railType)[profileKey];
+  if(!p) return false;
+  return !p.contexts || p.contexts.indexOf(context) >= 0;
+}
+function getActiveRailProfile(railType, railProfile, context) {
+  var entries = getRailProfileEntries(railType);
+  if(railProfile && isRailProfileAllowed(railType, railProfile, context)) {
+    return { key: railProfile, profile: entries[railProfile] };
+  }
+  var fallbackKey = getDefaultRailProfileForType(railType, context);
+  if(entries[fallbackKey]) return { key: fallbackKey, profile: entries[fallbackKey] };
+  var firstKey = Object.keys(entries)[0] || null;
+  return { key: firstKey, profile: firstKey ? entries[firstKey] : null };
+}
+function getRailProfileOptions(railType, context) {
+  return Object.keys(getRailProfileEntries(railType)).filter(function(k){
+    return isRailProfileAllowed(railType, k, context);
+  }).map(function(k){
+    var p = getRailProfileEntries(railType)[k];
+    return {v:k, l:p.label};
+  });
+}
+function getRailSectionDefaults(context, railType, railProfile, railGrade) {
+  var active = getActiveRailProfile(railType, railProfile, context);
+  if(active.profile) {
+    return {
+      profileKey: active.key,
+      profile: active.profile,
+      limits: {v:active.profile.limitV, l:active.profile.limitL},
+      reserveV: active.profile.reserveV,
+      reserveL: active.profile.reserveL,
+      minResV: active.profile.minResV,
+      minResL: active.profile.minResL,
+    };
+  }
+  return {
+    profileKey: null,
+    profile: null,
+    limits: LIMITS[context],
+    reserveV: railType==="groove" ? 12 : (RESERVE[railGrade] || 15),
+    reserveL: RESERVE_L[railGrade] || 8,
+    minResV: MIN_RES_V[railGrade] || 3.0,
+    minResL: MIN_RES_L[railGrade] || 3.0,
+  };
+}
 var RCF_MAX = 0.70;
 var HEAVY_RCF_GRIND_TRIGGER = { r1:0.45, r2:0.32, r3:0.30, r4:0.32, r5:0.38 };
 var CORRECTIVE_GRIND_TRIGGER = {
@@ -346,9 +415,6 @@ function calcEqMGT(trains,ctx) {
 function runSim(params) {
   var ctx=CONTEXTS[params.context], rt=RAIL_TYPES[params.railType], tm=TRACK_MODES[params.trackMode];
   var lubKey=params.lubrication||"none", mgtPY=calcMGT(params.trains), eqPY=calcEqMGT(params.trains,params.context);
-  var limits=LIMITS[params.context];
-  if(params.customLimV!==null && params.customLimV!==undefined) limits=Object.assign({},limits,{v:params.customLimV});
-  if(params.customLimL!==null && params.customLimL!==undefined) limits=Object.assign({},limits,{l:params.customLimL});
   // Reprofiling params
   var reprActive = params.reprActive || false;
   var reprThreshFrac = (params.reprThresh || 60) / 100;
@@ -359,8 +425,12 @@ function runSim(params) {
   var reprRadiusBased = params.reprRadiusBased !== false;
   var reprRemLByBand  = params.reprRemLByBand || REPR_REM_L_DEFAULT;
   var results=params.segments.map(function(seg){
+    var railSection = getRailSectionDefaults(params.context, params.railType, params.railProfile, seg.railGrade);
     var rb=BANDS.find(function(b){return seg.radius>=b.rMin&&seg.radius<b.rMax;})||BANDS[4];
     var ri=BANDS.indexOf(rb), grade=RAIL_GRADES[seg.railGrade]||RAIL_GRADES["R260"];
+    var limits=railSection.limits;
+    if(params.customLimV!==null && params.customLimV!==undefined) limits=Object.assign({},limits,{v:params.customLimV});
+    if(params.customLimL!==null && params.customLimL!==undefined) limits=Object.assign({},limits,{l:params.customLimL});
     var segSpeed = getRecommendedSegmentSpeed(seg, params.context, params.speed);
     var sfV=(SPEED_BANDS_V.find(function(s){return segSpeed<=s.max;})||SPEED_BANDS_V[SPEED_BANDS_V.length-1]).f_v;
     var speedBandId = TAMP_BAND(seg.radius || seg.repr || 9000);
@@ -384,10 +454,10 @@ function runSim(params) {
     var gMGT = (params.strategy==="preventive" && corrMGT)
       ? corrMGT
       : (params.strategy==="preventive" ? gi : gi*3);
-    var resI=params.railType==="groove"?12:(RESERVE[seg.railGrade]||15);
-    var resLI=(RESERVE_L[seg.railGrade]||8); // lateral grinding reserve from constants
-    var minResV=params.customResActive ? (params.customMinRes||3.0) : (MIN_RES_V[seg.railGrade]||3.0);
-    var minResL=params.customResActive ? (params.customMinRes||3.0) : (MIN_RES_L[seg.railGrade]||3.0);
+    var resI=railSection.reserveV;
+    var resLI=railSection.reserveL;
+    var minResV=params.customResActive ? (params.customMinRes||3.0) : railSection.minResV;
+    var minResL=params.customResActive ? (params.customMinRes||3.0) : railSection.minResL;
     var gp=params.strategy==="preventive"
       ? {rem:0.20,rcfR:0.30,pwf:0.75,pmgt:gi*0.85}
       : {rem:0.55,rcfR:0.18,pwf:0.92,pmgt:params.context==="heavy" ? gi*0.40 : 2.0};
@@ -481,7 +551,7 @@ function runSim(params) {
       data.push({year:y,mgt:+totMGT.toFixed(2),wearV:+Math.min(wV,limits.v).toFixed(3),wearL:+Math.min(wL,limits.l).toFixed(3),rcf:+Math.min(rcf,1).toFixed(3),res:+Math.max(0,res).toFixed(2),resL:+Math.max(0,resL).toFixed(2),ground:ground?1:0,reprofiled:(reprofiled&&!repl)?1:0,repl:repl?1:0,grindCause:grindCause,grindPasses:grindPasses,preGrindRCF:preGrindRCF!==null?+preGrindRCF.toFixed(3):null,postGrindRCF:postGrindRCF!==null?+postGrindRCF.toFixed(3):null,preGrindWearV:preGrindWearV!==null?+Math.min(preGrindWearV,limits.v).toFixed(3):null,postGrindWearV:postGrindWearV!==null?+Math.min(postGrindWearV,limits.v).toFixed(3):null});
       if(repl&&!repY){repY=y;break;}
     }
-    return {seg:seg,rb:rb,wrV:wrV,wrL:wrL,he:he,segSpeed:segSpeed,mgtPY:mgtPY,eqPY:eqPY,gCount:gCnt,reprCount:reprCnt,repY:repY,data:data,limits:limits,resL:+resL.toFixed(2)};
+    return {seg:seg,rb:rb,wrV:wrV,wrL:wrL,he:he,segSpeed:segSpeed,mgtPY:mgtPY,eqPY:eqPY,gCount:gCnt,reprCount:reprCnt,repY:repY,data:data,limits:limits,resL:+resL.toFixed(2),railProfile:railSection.profileKey};
   });
   return {results:results,mgtPY:mgtPY,eqPY:eqPY};
 }
@@ -531,26 +601,68 @@ function getRefPred(ref,gp){
   var trains=[{id:"s",label:"s",trainsPerDay:1,axleLoad:axleLoad,bogies:2,axlesPerBogie:2}];
   var segs=[{id:"s",label:ref.desc,radius:ref.r>=9999?9000:ref.r,railGrade:ref.grade}];
   try{
-    var res=runSim({context:ref.ctx,trains:trains,segments:segs,strategy:gp.strategy||"preventive",railType:gp.railType||"vignole",trackMode:gp.trackMode||"ballast",speed:gp.speed||80,lubrication:gp.lubrication||"none",horizonYears:1});
+    var res=runSim({context:ref.ctx,trains:trains,segments:segs,strategy:gp.strategy||"preventive",railType:gp.railType||"vignole",railProfile:ref.railProfile||gp.railProfile,trackMode:gp.trackMode||"ballast",speed:gp.speed||80,lubrication:gp.lubrication||"none",horizonYears:1});
     var s=res&&res.results&&res.results[0]; if(!s)return null;
     return {v:+s.wrV.toFixed(3),l:+s.wrL.toFixed(3)};
   }catch(e){return null;}
+}
+function getCalibrationEstimate(ref,gp){
+  if(!gp||ref.incomparable)return null;
+  var ctx=CONTEXTS[ref.ctx];
+  var radius=ref.r>=9999?9000:ref.r;
+  var rb=BANDS.find(function(b){return radius>=b.rMin&&radius<b.rMax;})||BANDS[BANDS.length-1];
+  var grade=RAIL_GRADES[ref.grade]||RAIL_GRADES.R260;
+  var railTypeKey=gp.railType||"vignole";
+  var trackModeKey=gp.trackMode||"ballast";
+  var rt=RAIL_TYPES[railTypeKey]||RAIL_TYPES.vignole;
+  var tm=TRACK_MODES[trackModeKey]||TRACK_MODES.ballast;
+  var segSpeed=Math.max(20, +(gp.speed||80));
+  var he=1.0-(1.0-grade.f_wear)/(1.0+rb.f_l*0.3);
+  var sfV=(SPEED_BANDS_V.find(function(s){return segSpeed<=s.max;})||SPEED_BANDS_V[SPEED_BANDS_V.length-1]).f_v;
+  var speedLatTable=SPEED_BANDS_L[rb.id]||SPEED_BANDS_L.r5;
+  var sfL=(speedLatTable.find(function(s){return segSpeed<=s.max;})||speedLatTable[speedLatTable.length-1]).f_l;
+  var lub=(LUBRICATION[gp.lubrication]||LUBRICATION.none);
+  var bandIndex=BANDS.findIndex(function(b){return b.id===rb.id;});
+  var lubF=lub.f[bandIndex>=0?bandIndex:4]||1.0;
+  var vFactor=rb.f_v*he*rt.f_v*tm.f_v*sfV;
+  var lFactor=1.5*rb.f_l*he*rt.f_l*tm.f_l*sfL*lubF;
+  var recV=ref.wV!=null&&vFactor>0?+(ref.wV/vFactor).toFixed(3):null;
+  var recL=ref.wL!=null&&lFactor>0?+(ref.wL/lFactor).toFixed(3):null;
+  var curV=ctx?ctx.baseWearV:null;
+  var curL=ctx?ctx.baseWearL:null;
+  return {
+    currentV:curV,
+    currentL:curL,
+    recommendedV:recV,
+    recommendedL:recL,
+    deltaVPct:(curV!=null&&recV!=null&&curV!==0)?+((((recV-curV)/curV)*100).toFixed(1)):null,
+    deltaLPct:(curL!=null&&recL!=null&&curL!==0)?+((((recL-curL)/curL)*100).toFixed(1)):null,
+  };
 }
 function devPct(pred,real){if(real==null||pred==null)return null;return(((pred-real)/real)*100).toFixed(1);}
 function devCol(p){var a=Math.abs(+p);return a<=15?cl.green:a<=30?cl.amber:cl.warn;}
 
 function ValidationPanel(props) {
   var context=props.context, gp=props.gp;
+  var activeProfileKey = getActiveRailProfile(gp&&gp.railType, gp&&gp.railProfile, context).key;
   const [userCases, setUserCases] = useState([]);
-  const [form, setForm] = useState({label:"",source:"",radius:300,grade:"R260",mgt:15,wV:"",wL:"",note:""});
+  const [form, setForm] = useState({label:"",source:"",radius:300,grade:"R260",railProfile:activeProfileKey,mgt:15,wV:"",wL:"",note:""});
   const [showForm, setShowForm] = useState(false);
+  useEffect(function(){
+    var opts = getRailProfileOptions(gp&&gp.railType||"vignole", context).map(function(o){return o.v;});
+    if(opts.indexOf(form.railProfile)===-1){
+      setForm(function(f){return Object.assign({},f,{railProfile:activeProfileKey});});
+    }
+  }, [context, gp&&gp.railType, gp&&gp.railProfile, activeProfileKey, form.railProfile]);
   var cases=useMemo(function(){return REF.filter(function(r){return r.ctx===context;}).concat(userCases);},[context,userCases]);
-  var preds=useMemo(function(){return cases.map(function(r){return getRefPred(r,gp);});},[cases,gp&&gp.railType,gp&&gp.trackMode,gp&&gp.speed,gp&&gp.lubrication,gp&&gp.strategy]);
+  var preds=useMemo(function(){return cases.map(function(r){return getRefPred(r,gp);});},[cases,gp&&gp.railType,gp&&gp.railProfile,gp&&gp.trackMode,gp&&gp.speed,gp&&gp.lubrication,gp&&gp.strategy]);
+  var calibrationEstimates=useMemo(function(){return cases.map(function(r){return getCalibrationEstimate(r,gp);});},[cases,gp&&gp.railType,gp&&gp.trackMode,gp&&gp.speed,gp&&gp.lubrication]);
   var chartData=cases.map(function(r,i){var p=preds[i];if(r.wV==null||p==null)return null;return{name:r.id,sim:p.v,real:r.wV};}).filter(Boolean);
+  var lateralChartData=cases.map(function(r,i){var p=preds[i];if(r.wL==null||p==null)return null;return{name:r.id,sim:p.l,real:r.wL};}).filter(Boolean);
   function addCase(){
     if(!form.label)return;
-    setUserCases(function(u){return u.concat([{id:"u"+Date.now(),source:form.source||"User",ctx:context,desc:form.label,r:form.radius,grade:form.grade,mgt:form.mgt,wV:form.wV!==""?+form.wV:null,wL:form.wL!==""?+form.wL:null,note:form.note,isUser:true}]);});
-    setForm({label:"",source:"",radius:300,grade:"R260",mgt:15,wV:"",wL:"",note:""});
+    setUserCases(function(u){return u.concat([{id:"u"+Date.now(),source:form.source||"User",ctx:context,desc:form.label,r:form.radius,grade:form.grade,railProfile:form.railProfile||activeProfileKey,mgt:form.mgt,wV:form.wV!==""?+form.wV:null,wL:form.wL!==""?+form.wL:null,note:form.note,isUser:true}]);});
+    setForm({label:"",source:"",radius:300,grade:"R260",railProfile:activeProfileKey,mgt:15,wV:"",wL:"",note:""});
     setShowForm(false);
   }
   var sym=(CURRENCIES[gp&&gp.currency]||CURRENCIES.EUR).symbol;
@@ -561,7 +673,7 @@ function ValidationPanel(props) {
           <div style={{fontSize:11,letterSpacing:3,color:cl.teal,fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Validation and Calibration</div>
           <div style={{fontSize:18,fontWeight:700,color:"#e8f4f3"}}>Simulator vs Real-World Measurement Data</div>
           <div style={{fontSize:12,color:cl.dim,marginTop:4}}>Sources: Belgian Network (Infrabel/TU Delft 2023), Guangzhou Metro (2021-2022)</div>
-          {gp&&<div style={{fontSize:11,color:"#4a6a74",marginTop:6,padding:"4px 10px",background:"rgba(125,211,200,0.04)",borderRadius:6,display:"inline-block"}}>Predictions use: {RAIL_TYPES[gp.railType]&&RAIL_TYPES[gp.railType].label} / {TRACK_MODES[gp.trackMode]&&TRACK_MODES[gp.trackMode].label} / {gp.speed} km/h / {gp.strategy}</div>}
+          {gp&&<div style={{fontSize:11,color:"#4a6a74",marginTop:6,padding:"4px 10px",background:"rgba(125,211,200,0.04)",borderRadius:6,display:"inline-block"}}>Predictions use: {RAIL_TYPES[gp.railType]&&RAIL_TYPES[gp.railType].label} / {(getActiveRailProfile(gp.railType, gp.railProfile, context).profile||{}).label||getActiveRailProfile(gp.railType, gp.railProfile, context).key} / {TRACK_MODES[gp.trackMode]&&TRACK_MODES[gp.trackMode].label} / {gp.speed} km/h / {gp.strategy}</div>}
         </div>
         <Btn onClick={function(){setShowForm(function(v){return !v;});}} sm={true} active={showForm}>{showForm?"Cancel":"+ Add real measurement"}</Btn>
       </div>
@@ -573,6 +685,7 @@ function ValidationPanel(props) {
             <div><Lbl>Source</Lbl><Inp value={form.source} onChange={function(v){setForm(function(f){return Object.assign({},f,{source:v});});}} type="text" ph="e.g. Project name"/></div>
             <div><Lbl>Radius (m)</Lbl><Inp value={form.radius} onChange={function(v){setForm(function(f){return Object.assign({},f,{radius:v});});}} min={50}/></div>
             <div><Lbl>Rail grade</Lbl><Sel value={form.grade} onChange={function(v){setForm(function(f){return Object.assign({},f,{grade:v});});}} opts={Object.keys(RAIL_GRADES).map(function(k){return {v:k,l:k};})}/></div>
+            <div><Lbl>Rail profile</Lbl><Sel value={form.railProfile||activeProfileKey} onChange={function(v){setForm(function(f){return Object.assign({},f,{railProfile:v});});}} opts={getRailProfileOptions(gp&&gp.railType||"vignole", context)}/></div>
             <div><Lbl>MGT/yr</Lbl><Inp value={form.mgt} onChange={function(v){setForm(function(f){return Object.assign({},f,{mgt:v});});}} min={0.1} step={0.5}/></div>
             <div><Lbl>Vertical wear (mm/100MGT)</Lbl><input value={form.wV} onChange={function(e){setForm(function(f){return Object.assign({},f,{wV:e.target.value});});}} type="number" step="0.01" placeholder="e.g. 1.2" style={iS}/></div>
             <div><Lbl>Lateral wear (mm/100MGT)</Lbl><input value={form.wL} onChange={function(e){setForm(function(f){return Object.assign({},f,{wL:e.target.value});});}} type="number" step="0.01" placeholder="e.g. 4.5" style={iS}/></div>
@@ -598,6 +711,21 @@ function ValidationPanel(props) {
           ):<div style={{textAlign:"center",color:"#4a6a74",padding:"40px 0",fontSize:13}}>No data for this context</div>}
         </div>
         <div style={{background:"rgba(0,0,0,0.2)",borderRadius:12,padding:20,border:"1px solid rgba(125,211,200,0.1)"}}>
+          <div style={{fontSize:11,color:cl.teal,letterSpacing:2,textTransform:"uppercase",fontWeight:700,marginBottom:14}}>Lateral Wear - Simulator vs Measured (mm/100MGT)</div>
+          {lateralChartData.length>0?(
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={lateralChartData} layout="vertical" margin={{left:10,right:20}}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)"/>
+                <XAxis type="number" stroke="#4a6a74" tick={{fontSize:10}} unit=" mm"/>
+                <YAxis type="category" dataKey="name" stroke="#4a6a74" tick={{fontSize:10}} width={80}/>
+                <Tooltip content={<Tip/>}/><Legend wrapperStyle={{fontSize:11}}/>
+                <Bar dataKey="real" name="Measured" fill={cl.amber} opacity={0.85} radius={[0,3,3,0]}/>
+                <Bar dataKey="sim"  name="Simulator" fill={cl.teal} opacity={0.85} radius={[0,3,3,0]}/>
+              </BarChart>
+            </ResponsiveContainer>
+          ):<div style={{textAlign:"center",color:"#4a6a74",padding:"40px 0",fontSize:13}}>No lateral wear data for this context</div>}
+        </div>
+        <div style={{background:"rgba(0,0,0,0.2)",borderRadius:12,padding:20,border:"1px solid rgba(125,211,200,0.1)",gridColumn:"1 / span 2"}}>
           <div style={{fontSize:11,color:cl.teal,letterSpacing:2,textTransform:"uppercase",fontWeight:700,marginBottom:14}}>Deviation - Simulator vs Field</div>
           <div style={{display:"flex",flexDirection:"column",gap:10}}>
             {chartData.map(function(d){var ep=devPct(d.sim,d.real);if(ep==null)return null;var col=devCol(ep);return(
@@ -615,23 +743,33 @@ function ValidationPanel(props) {
           <div style={{fontSize:11,letterSpacing:2,color:cl.teal,textTransform:"uppercase",fontWeight:700}}>Reference Cases</div>
           <div style={{fontSize:11,color:cl.dim}}>{cases.length} cases loaded</div>
         </div>
+        <div style={{padding:"10px 18px",fontSize:11,color:cl.dim,borderBottom:"1px solid rgba(255,255,255,0.06)",background:"rgba(125,211,200,0.03)"}}>
+          Indicative only: the recommended base values below are back-calculated from each case using the current rail type, track form, speed and lubrication. They do not modify the simulator.
+        </div>
         <div style={{overflowX:"auto"}}>
           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-            <thead><tr style={{background:"rgba(255,255,255,0.03)"}}>{["Source","Description","Radius","Grade","MGT/yr","V.Wear Real","V.Wear Sim.","Dev.V","L.Wear Real","L.Wear Sim.","Dev.L","Notes"].map(function(h){return <th key={h} style={{padding:"8px 12px",textAlign:"left",color:cl.dim,fontWeight:600,whiteSpace:"nowrap",fontSize:11}}>{h}</th>;})}</tr></thead>
+            <thead><tr style={{background:"rgba(255,255,255,0.03)"}}>{["Source","Description","Radius","Grade","Profile","MGT/yr","V.Wear Real","V.Wear Sim.","Dev.V","Base V now","Base V rec.","Delta V","L.Wear Real","L.Wear Sim.","Dev.L","Base L now","Base L rec.","Delta L","Notes"].map(function(h){return <th key={h} style={{padding:"8px 12px",textAlign:"left",color:cl.dim,fontWeight:600,whiteSpace:"nowrap",fontSize:11}}>{h}</th>;})}</tr></thead>
             <tbody>
-              {cases.map(function(r,i){var p=preds[i],eV=r.incomparable?null:devPct(p&&p.v,r.wV),eL=r.incomparable?null:devPct(p&&p.l,r.wL);return(
+              {cases.map(function(r,i){var p=preds[i],eV=r.incomparable?null:devPct(p&&p.v,r.wV),eL=r.incomparable?null:devPct(p&&p.l,r.wL),cal=calibrationEstimates[i],dVCol=cal&&cal.deltaVPct!=null?devCol(cal.deltaVPct):cl.dim,dLCol=cal&&cal.deltaLPct!=null?devCol(cal.deltaLPct):cl.dim;return(
                 <tr key={r.id} style={{borderTop:"1px solid rgba(255,255,255,0.04)",background:r.isUser?"rgba(125,211,200,0.04)":r.incomparable?"rgba(251,191,36,0.03)":"transparent"}}>
                   <td style={{padding:"8px 12px",color:r.isUser?cl.teal:r.incomparable?cl.amber:cl.muted,fontSize:11}}>{r.isUser?"U ":r.incomparable?"! ":"R "}{r.source}</td>
                   <td style={{padding:"8px 12px",color:cl.text,fontSize:11}}>{r.desc}</td>
                   <td style={{padding:"8px 12px",fontFamily:"monospace"}}>{r.r>=9999?"tangent":r.r+"m"}</td>
                   <td style={{padding:"8px 12px",fontFamily:"monospace",color:cl.purple}}>{r.grade}</td>
+                  <td style={{padding:"8px 12px",fontFamily:"monospace",color:cl.teal}}>{r.railProfile||"-"}</td>
                   <td style={{padding:"8px 12px",fontFamily:"monospace"}}>{r.mgt}</td>
                   <td style={{padding:"8px 12px",fontFamily:"monospace",color:cl.amber}}>{r.wV!=null?r.wV:"-"}</td>
                   <td style={{padding:"8px 12px",fontFamily:"monospace",color:cl.teal}}>{r.incomparable?"-":(p?p.v:"-")}</td>
                   <td style={{padding:"8px 12px"}}>{eV!=null?<span style={{color:devCol(eV),fontWeight:700}}>{+eV>0?"+":""}{eV}%</span>:"-"}</td>
+                  <td style={{padding:"8px 12px",fontFamily:"monospace",color:cl.dim}}>{cal&&cal.currentV!=null?cal.currentV.toFixed(3):"-"}</td>
+                  <td style={{padding:"8px 12px",fontFamily:"monospace",color:cl.teal}}>{cal&&cal.recommendedV!=null?cal.recommendedV.toFixed(3):"-"}</td>
+                  <td style={{padding:"8px 12px"}}>{cal&&cal.deltaVPct!=null?<span style={{color:dVCol,fontWeight:700}}>{cal.deltaVPct>0?"+":""}{cal.deltaVPct.toFixed(1)}%</span>:"-"}</td>
                   <td style={{padding:"8px 12px",fontFamily:"monospace",color:cl.amber}}>{r.incomparable?<span style={{color:cl.amber}}>{r.rawWearL} mm*</span>:(r.wL!=null?r.wL:"-")}</td>
                   <td style={{padding:"8px 12px",fontFamily:"monospace",color:cl.teal}}>{r.incomparable?"-":(p?p.l:"-")}</td>
                   <td style={{padding:"8px 12px"}}>{eL!=null?<span style={{color:devCol(eL),fontWeight:700}}>{+eL>0?"+":""}{eL}%</span>:(r.incomparable?<span style={{color:cl.amber,fontSize:10}}>unit mismatch</span>:"-")}</td>
+                  <td style={{padding:"8px 12px",fontFamily:"monospace",color:cl.dim}}>{cal&&cal.currentL!=null?cal.currentL.toFixed(3):"-"}</td>
+                  <td style={{padding:"8px 12px",fontFamily:"monospace",color:cl.amber}}>{cal&&cal.recommendedL!=null?cal.recommendedL.toFixed(3):"-"}</td>
+                  <td style={{padding:"8px 12px"}}>{cal&&cal.deltaLPct!=null?<span style={{color:dLCol,fontWeight:700}}>{cal.deltaLPct>0?"+":""}{cal.deltaLPct.toFixed(1)}%</span>:"-"}</td>
                   <td style={{padding:"8px 12px",color:r.incomparable?cl.amber:cl.muted,fontSize:11}}>{r.note}</td>
                 </tr>
               );})}
@@ -1908,7 +2046,7 @@ var HELP=[
    ]
   },
   {id:"validation",title:"Validation and Calibration",
-   body:"PURPOSE: Compare simulator predictions against field measurements before using results for budget decisions.\n\nHOW IT WORKS: Predictions use the FULL engine with your current parameters. A synthetic train fleet reproduces the reference MGT/yr. No simplified sub-model.\n\nREFERENCE CASES:\n- BE1: Infrabel/TU Delft 2023, heavy, tangent, R260, 25 MGT/yr. V=0.82 mm/100MGT. Model calibration baseline.\n- BE2: Same source, R500m, R260, 25 MGT/yr. V=1.40, L=2.80. Tests curve wear factor model.\n- BE3: Same source, tangent, R200 grade, 25 MGT/yr. V=1.10. Tests hardness model.\n- GZ1: Guangzhou Metro 2021, R300m, R260, 15 MGT/yr. V=2.10, L=6.50. Tests metro context.\n- GZ2 (!): EMU depot R350m - INCOMPARABLE. 10.1mm lateral is absolute after 1M passes, not a rate.\n\nDEVIATION: Green <15% (good), Yellow 15-30% (review parameters), Red >30% (recalibrate for your context).",
+   body:"PURPOSE: Compare simulator predictions against field measurements before using results for budget decisions.\n\nHOW IT WORKS: Predictions use the FULL engine with your current parameters. A synthetic train fleet reproduces the reference MGT/yr. No simplified sub-model. Validation now compares both vertical wear and lateral wear when measured data are available.\n\nREAL MEASUREMENTS:\n- You can add project-specific cases manually.\n- Each case stores radius, rail grade, rail profile, MGT/yr, and optional measured vertical / lateral wear.\n- The prediction for that case uses the case rail profile first, then the current global project settings for rail type, track form, speed, lubrication, and strategy.\n\nINDICATIVE CALIBRATION SUPPORT:\n- The table shows Base V now / Base V rec. / Delta V and Base L now / Base L rec. / Delta L.\n- These recommended base values are back-calculated from the selected case by removing the active case factors (radius, grade, rail type, track form, speed, lubrication).\n- They are informational only. They do NOT recalibrate the engine automatically.\n\nREFERENCE CASES:\n- BE1: Infrabel/TU Delft 2023, heavy, tangent, R260, 25 MGT/yr. V=0.82 mm/100MGT. Model calibration baseline.\n- BE2: Same source, R500m, R260, 25 MGT/yr. V=1.40, L=2.80. Tests curve wear factor model.\n- BE3: Same source, tangent, R200 grade, 25 MGT/yr. V=1.10. Tests hardness model.\n- GZ1: Guangzhou Metro 2021, R300m, R260, 15 MGT/yr. V=2.10, L=6.50. Tests metro context.\n- GZ2 (!): EMU depot R350m - INCOMPARABLE. 10.1mm lateral is absolute after 1M passes, not a rate.\n\nDEVIATION: Green <15% (good), Yellow 15-30% (review parameters), Red >30% (recalibrate for your context).",
    links:[
      {label:"Rooij L. et al. (2023) - Statistical analysis of rail wear, Belgian network, Wear 522",url:"https://doi.org/10.1016/j.wear.2022.204764",type:"paper"},
      {label:"Liu B. et al. (2021) - Rail wear on Guangzhou Metro, Wear 477",url:"https://doi.org/10.1016/j.wear.2021.203830",type:"paper"},
@@ -2586,6 +2724,7 @@ function ComparePanel(props) {
     context:      params.context,
     trains:       params.trains,
     railType:     params.railType,
+    railProfile:  params.railProfile,
     trackMode:    params.trackMode,
     speed:        params.speed,
     lubrication:  params.lubrication,
@@ -2724,7 +2863,7 @@ function ComparePanel(props) {
   }
 
   var chartData = asr ? mergeData(prevSeg, corrSeg) : [];
-  var _baseLim = LIMITS[context]||{v:9,l:11};
+  var _baseLim = getRailSectionDefaults(context, props.params&&props.params.railType, props.params&&props.params.railProfile, "R260").limits || {v:9,l:11};
   var limV = (props.params&&props.params.customLimV!=null)?props.params.customLimV:_baseLim.v;
   var limL = (props.params&&props.params.customLimL!=null)?props.params.customLimL:_baseLim.l;
   return (
@@ -2802,8 +2941,8 @@ function ComparePanel(props) {
                   isFirst?(corrRepls+" segments"):(fhReplsC+" replacements"),
                   isFirst?(prevRepls<=corrRepls?"preventive":"corrective"):(fhReplsP<=fhReplsC?"preventive":"corrective")],
                 ["Total grindings",
-                  isFirst?(prevResult.results.reduce(function(a,r){return a+r.gCount;},0)+" passes"):(fhPassP+" passes"),
-                  isFirst?(corrResult.results.reduce(function(a,r){return a+r.gCount;},0)+" passes"):(fhPassC+" passes"),
+                  isFirst?(prevView.results.reduce(function(a,r){return a+r.gCount;},0)+" passes"):(fhPassP+" passes"),
+                  isFirst?(corrView.results.reduce(function(a,r){return a+r.gCount;},0)+" passes"):(fhPassC+" passes"),
                   "preventive"],
                 ["Grind cost",
                   isFirst?fmt(segData.reduce(function(a,s){return a+s.pGrindCost;},0)):fmt(fhGrindP),
@@ -3542,6 +3681,7 @@ export default function App() {
     {id:"r5",label:"R >= 800 m",      active:true, lengthKm:6.5,grade:"R260",  repr:9999},
   ]);
   const [railType, setRT]   = useState("vignole");
+  const [railProfile, setRailProfile] = useState(getDefaultRailProfileForType("vignole", "metro"));
   const [trackMode,setTM]   = useState("ballast");
   const [speed,    setSp]   = useState(80);
   const [lubr,     setLb]   = useState("none");
@@ -3587,11 +3727,17 @@ export default function App() {
     setCon(nextContext);
     if(next.railType!==railType) setRT(next.railType);
     if(next.trackMode!==trackMode) setTM(next.trackMode);
+    setRailProfile(function(prev){
+      return getActiveRailProfile(next.railType, prev, nextContext).key;
+    });
   }
   function handleRailTypeChange(nextRailType){
     var next = enforceContextCombination(context, nextRailType, trackMode);
     setRT(next.railType);
     if(next.trackMode!==trackMode) setTM(next.trackMode);
+    setRailProfile(function(prev){
+      return getActiveRailProfile(next.railType, prev, context).key;
+    });
   }
   function handleTrackModeChange(nextTrackMode){
     var next = enforceContextCombination(context, railType, nextTrackMode);
@@ -3602,7 +3748,9 @@ export default function App() {
     var next = enforceContextCombination(context, railType, trackMode);
     if(next.railType!==railType) setRT(next.railType);
     if(next.trackMode!==trackMode) setTM(next.trackMode);
-  }, [context, railType, trackMode]);
+    var normalizedProfile = getActiveRailProfile(next.railType, railProfile, context).key;
+    if(normalizedProfile!==railProfile) setRailProfile(normalizedProfile);
+  }, [context, railType, trackMode, railProfile]);
   // Reprofiling model
   const [reprActive,  setReprActive] = useState(false);
   const [reprThresh,  setReprThresh] = useState(60);
@@ -3807,6 +3955,12 @@ export default function App() {
     var c = calcCostPerMl(p, grade||"R260", replWeldType, 6, "EUR", replOvhdPct, false, replJointSp);
     return c.total;
   }
+  var activeRailProfile = useMemo(function(){
+    return getActiveRailProfile(railType, railProfile, context);
+  }, [railType, railProfile, context]);
+  var activeRailSectionDefaults = useMemo(function(){
+    return getRailSectionDefaults(context, railType, railProfile, "R260");
+  }, [context, railType, railProfile]);
 
   var viewResult = useMemo(function(){
     return applyReplacementYearMaintenanceOverrides(result, {
@@ -3890,12 +4044,12 @@ export default function App() {
     });
     var allSegs = active.concat(activeZones);
     if(allSegs.length===0){setErr("Enable at least one radius band or special zone.");return;}
-    try{setErr(null);var r=runSim({context:context,trains:trains,segments:allSegs,strategy:strategy,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon,customLimV:customLimActive?customLimV:null,customLimL:customLimActive?customLimL:null,customResActive:customResActive,customMinRes:customMinRes,reprActive:reprActive,reprThresh:reprThresh,reprRemL:reprRemL,reprRemV:reprRemV,reprRcfR:reprRcfR,reprSkip:reprSkip,reprRadiusBased:reprRadiusBased,reprRemLByBand:reprRemLByBand});setRes(r);setAi(0);setHR(true);}
+    try{setErr(null);var r=runSim({context:context,trains:trains,segments:allSegs,strategy:strategy,railType:railType,railProfile:railProfile,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon,customLimV:customLimActive?customLimV:null,customLimL:customLimActive?customLimL:null,customResActive:customResActive,customMinRes:customMinRes,reprActive:reprActive,reprThresh:reprThresh,reprRemL:reprRemL,reprRemV:reprRemV,reprRcfR:reprRcfR,reprSkip:reprSkip,reprRadiusBased:reprRadiusBased,reprRemLByBand:reprRemLByBand});setRes(r);setAi(0);setHR(true);}
     catch(e){setErr("Simulation error: "+e.message);}
-  },[context,trains,segs,strategy,railType,trackMode,speed,lubr,horizon,isBF,initCond,specialZones,customLimActive,customLimV,customLimL,reprActive,reprThresh,reprRemL,reprRemV,reprRcfR,reprSkip,reprRadiusBased,reprRemLByBand,customResActive,customMinRes]);
+  },[context,trains,segs,strategy,railType,railProfile,trackMode,speed,lubr,horizon,isBF,initCond,specialZones,customLimActive,customLimV,customLimL,reprActive,reprThresh,reprRemL,reprRemV,reprRcfR,reprSkip,reprRadiusBased,reprRemLByBand,customResActive,customMinRes]);
 
   var asr=viewResult&&viewResult.results[aidx];
-  var gp={railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,strategy:strategy};
+  var gp={railType:railType,railProfile:railProfile,trackMode:trackMode,speed:speed,lubrication:lubr,strategy:strategy};
 
   function generatePDF() {
     try{
@@ -4138,6 +4292,7 @@ export default function App() {
     var globalRows = [
       ["Context", CONTEXTS[context].label],
       ["Rail Type", RAIL_TYPES[railType].label],
+      ["Rail Profile", (activeRailProfile.profile||{}).label || activeRailProfile.key || "-"],
       ["Track Form", TRACK_MODES[trackMode].label],
       ["Line Speed", speed+" km/h"],
       ["Flange Lubrication", LUBRICATION[lubr].label],
@@ -4358,7 +4513,7 @@ export default function App() {
         if(isBF&&initCond[s.id]){var ic=initCond[s.id];b.initWearV=ic.wearV||0;b.initWearL=ic.wearL||0;b.initRCF=ic.rcf||0;}
         return b;
       });
-      var baseParams={context:context,trains:trains,segments:activeSegsForCmp,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon};
+      var baseParams={context:context,trains:trains,segments:activeSegsForCmp,railType:railType,railProfile:railProfile,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon};
       var rPrev=runSim(Object.assign({},baseParams,{strategy:"preventive"}));
       var rCorr=runSim(Object.assign({},baseParams,{strategy:"corrective"}));
     
@@ -4813,17 +4968,46 @@ export default function App() {
             <Btn onClick={addTrain} sm={true}>+ Add train type</Btn>
           </Card>
 
+          <Card title="Rail Parameters">
+            <div style={{display:"grid",gap:10}}>
+              <div><Lbl>Rail Type</Lbl><Sel value={railType} onChange={handleRailTypeChange} opts={Object.keys(RAIL_TYPES).filter(function(k){return !(context==="heavy"&&k==="groove");}).map(function(k){return {v:k,l:RAIL_TYPES[k].label};})}/></div>
+              <div>
+                <Lbl>Rail Profile</Lbl>
+                <Sel value={activeRailProfile.key||""} onChange={setRailProfile} opts={getRailProfileOptions(railType, context)}/>
+                {activeRailProfile.profile&&<div style={{fontSize:10,color:cl.dim,marginTop:3}}>{activeRailProfile.profile.standard} - {activeRailProfile.profile.massKgM} kg/m - limits V/L {activeRailProfile.profile.limitV}/{activeRailProfile.profile.limitL} mm</div>}
+              </div>
+              <div><Lbl>Track Form</Lbl><Sel value={trackMode} onChange={handleTrackModeChange} opts={Object.keys(TRACK_MODES).filter(function(k){return !(context==="heavy"&&k==="embedded");}).map(function(k){return {v:k,l:TRACK_MODES[k].label};})}/></div>
+              <div><Lbl>Line speed (km/h)</Lbl><Inp value={speed} onChange={setSp} min={20} max={320}/></div>
+              <div>
+                <Lbl>Flange Lubrication</Lbl>
+                <Sel value={lubr} onChange={setLb} opts={Object.keys(LUBRICATION).map(function(k){return {v:k,l:LUBRICATION[k].label};})}/>
+                <div style={{fontSize:11,color:cl.dim,marginTop:5}}>{lubr==="none"&&"No lateral wear reduction - dry conditions"}{lubr==="poor"&&"Badly maintained - low reduction"}{lubr==="standard"&&"Correctly adjusted wayside - significant reduction on tight curves"}{lubr==="good"&&"Wayside and onboard combined - good coverage"}{lubr==="optimal"&&"Lab conditions only - unrealistic in revenue service"}</div>
+              </div>
+              {context==="heavy"&&<div style={{fontSize:11,color:cl.dim,background:"rgba(125,211,200,0.05)",borderRadius:6,padding:"8px 10px",border:"1px solid rgba(125,211,200,0.1)"}}>Heavy rail is currently restricted to Vignole rail with Ballasted or Slab track.</div>}
+              {context==="metro"&&(railType==="groove"||trackMode==="embedded")&&<div style={{fontSize:11,color:cl.amber,background:"rgba(251,191,36,0.08)",borderRadius:6,padding:"8px 10px",border:"1px solid rgba(251,191,36,0.18)"}}>Atypical metro configuration. Use groove rail or embedded track only for special urban or depot cases.</div>}
+              <div style={{fontSize:11,color:cl.dim,background:"rgba(125,211,200,0.05)",borderRadius:6,padding:"8px 10px",border:"1px solid rgba(125,211,200,0.1)"}}>Rail hardness (grade) is set per segment above. Wear limits and reserve defaults now come from the selected global rail profile unless manual override is active.</div>
+            </div>
+          </Card>
+
+          <Card title="Maintenance Strategy">
+            <div style={{display:"flex",gap:8,marginBottom:10}}>
+              <Btn onClick={function(){setSt("preventive");}} active={strategy==="preventive"}>Preventive</Btn>
+              <Btn onClick={function(){setSt("corrective");}} active={strategy==="corrective"}>Corrective</Btn>
+            </div>
+            <div style={{fontSize:12,color:cl.dim,lineHeight:1.6}}>{strategy==="preventive"?"Frequent grinding (short intervals). 1 light pass ~0.2mm. RCF kept low. Maximum rail life.":"Condition-based corrective grinding. Tram/metro trigger on vertical wear and/or RCF; heavy rail also uses band-based early RCF triggers. Up to 4 heavy passes depending on severity."}</div>
+            <div style={{marginTop:12}}><Lbl>Simulation horizon (years)</Lbl><Inp value={horizon} onChange={setHz} min={5} max={50}/></div>
+          </Card>
 
           <Card title="Wear Limits">
             <div style={{marginBottom:8,fontSize:11,color:cl.dim,lineHeight:1.6}}>
-              Default limits from context: V={LIMITS[context]&&LIMITS[context].v}mm | L={LIMITS[context]&&LIMITS[context].l}mm (EN 13674 / UIC 714)
+              Default limits from selected profile: V={activeRailSectionDefaults.limits&&activeRailSectionDefaults.limits.v}mm | L={activeRailSectionDefaults.limits&&activeRailSectionDefaults.limits.l}mm ({activeRailProfile.profile?activeRailProfile.profile.label:"context fallback"})
             </div>
             <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:customLimActive?12:0}}>
               <div onClick={function(){
                 setCustomLimActive(function(v){
                   var next=!v;
-                  if(next && !customLimV) setCustomLimV(LIMITS[context]&&LIMITS[context].v);
-                  if(next && !customLimL) setCustomLimL(LIMITS[context]&&LIMITS[context].l);
+                  if(next && !customLimV) setCustomLimV(activeRailSectionDefaults.limits&&activeRailSectionDefaults.limits.v);
+                  if(next && !customLimL) setCustomLimL(activeRailSectionDefaults.limits&&activeRailSectionDefaults.limits.l);
                   return next;
                 });
               }} style={{width:30,height:17,borderRadius:8,background:customLimActive?cl.teal:"rgba(255,255,255,0.1)",position:"relative",cursor:"pointer",flexShrink:0,border:"1px solid "+(customLimActive?cl.teal:"rgba(255,255,255,0.2)")}}>
@@ -4839,12 +5023,12 @@ export default function App() {
                 <div>
                   <Lbl>Vertical wear limit (mm)</Lbl>
                   <Inp value={customLimV||""} onChange={function(v){setCustomLimV(+v);}} min={1} max={30} step={0.5}/>
-                  <div style={{fontSize:10,color:cl.dim,marginTop:3}}>Default: {LIMITS[context]&&LIMITS[context].v} mm ({context})</div>
+                  <div style={{fontSize:10,color:cl.dim,marginTop:3}}>Default: {activeRailSectionDefaults.limits&&activeRailSectionDefaults.limits.v} mm ({activeRailProfile.profile?activeRailProfile.profile.label:"fallback"})</div>
                 </div>
                 <div>
                   <Lbl>Lateral wear limit (mm)</Lbl>
                   <Inp value={customLimL||""} onChange={function(v){setCustomLimL(+v);}} min={1} max={30} step={0.5}/>
-                  <div style={{fontSize:10,color:cl.dim,marginTop:3}}>Default: {LIMITS[context]&&LIMITS[context].l} mm ({context})</div>
+                  <div style={{fontSize:10,color:cl.dim,marginTop:3}}>Default: {activeRailSectionDefaults.limits&&activeRailSectionDefaults.limits.l} mm ({activeRailProfile.profile?activeRailProfile.profile.label:"fallback"})</div>
                 </div>
               </div>
             )}
@@ -4865,13 +5049,13 @@ export default function App() {
                 <Lbl>Minimum reserve threshold (V and L) (mm)</Lbl>
                 <Inp value={customMinRes} onChange={function(v){setCustomMinRes(+v);}} min={0.5} max={6} step={0.5}/>
                 <div style={{fontSize:10,color:cl.dim,marginTop:4,lineHeight:1.5}}>
-                  Applied to both vertical and lateral reserves. Literature default by grade: R200-R320Cr=3.0mm, R350HT-R400HT=3.5-4.0mm (EN 13674-1 / Magel 2017).
+                  Applied to both vertical and lateral reserves. When override is off, defaults come from the selected rail profile.
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginTop:8,padding:"6px 10px",background:"rgba(251,191,36,0.04)",borderRadius:6,border:"1px solid rgba(251,191,36,0.12)"}}>
                   <div style={{fontSize:10,color:cl.dim}}>Default V reserve (literature):</div>
-                  <div style={{fontSize:10,color:cl.text,fontFamily:"monospace"}}>{(MIN_RES_V["R260"]||3.0).toFixed(1)} mm (R260 default)</div>
+                  <div style={{fontSize:10,color:cl.text,fontFamily:"monospace"}}>{(activeRailSectionDefaults.minResV||3.0).toFixed(1)} mm ({activeRailProfile.profile?activeRailProfile.profile.label:"fallback"})</div>
                   <div style={{fontSize:10,color:cl.dim}}>Default L reserve (literature):</div>
-                  <div style={{fontSize:10,color:cl.text,fontFamily:"monospace"}}>{(MIN_RES_L["R260"]||3.0).toFixed(1)} mm (R260 default)</div>
+                  <div style={{fontSize:10,color:cl.text,fontFamily:"monospace"}}>{(activeRailSectionDefaults.minResL||3.0).toFixed(1)} mm ({activeRailProfile.profile?activeRailProfile.profile.label:"fallback"})</div>
                   <div style={{fontSize:10,color:cl.dim}}>Your override:</div>
                   <div style={{fontSize:10,color:cl.amber,fontFamily:"monospace",fontWeight:700}}>{customMinRes.toFixed(1)} mm (V and L)</div>
                 </div>
@@ -4879,7 +5063,7 @@ export default function App() {
             )}
             {!customResActive&&(
               <div style={{fontSize:10,color:"#4a6a74",lineHeight:1.5}}>
-                Using literature values by grade: R200-R260=3.0mm, R320Cr=3.0-3.5mm, R350HT-R400HT=3.5-4.0mm.
+                Using minimum reserve thresholds from the selected rail profile unless manual override is enabled.
               </div>
             )}
           </Card>
@@ -4899,7 +5083,7 @@ export default function App() {
                   <div>
                     <Lbl>Trigger threshold (% of lateral limit)</Lbl>
                     <Inp value={reprThresh} onChange={function(v){setReprThresh(+v);}} min={30} max={95} step={5}/>
-                    <div style={{fontSize:10,color:cl.dim,marginTop:3}}>Currently: {((reprThresh/100)*((customLimActive&&customLimL)||LIMITS[context].l)).toFixed(1)} mm lateral wear</div>
+                    <div style={{fontSize:10,color:cl.dim,marginTop:3}}>Currently: {((reprThresh/100)*((customLimActive&&customLimL)||activeRailSectionDefaults.limits.l)).toFixed(1)} mm lateral wear</div>
                   </div>
                   <div style={{gridColumn:"1/-1"}}>
                     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
@@ -4999,22 +5183,6 @@ export default function App() {
             <div style={{fontSize:10,color:"#4a6a74",marginTop:6}}>Default: R400HT (R&lt;100m) / R350HT (100-200m) / R320Cr (200-800m) / R260 (tangent)</div>
           </Card>
 
-          <Card title="Rail Parameters">
-            <div style={{display:"grid",gap:10}}>
-              <div><Lbl>Rail Type</Lbl><Sel value={railType} onChange={handleRailTypeChange} opts={Object.keys(RAIL_TYPES).filter(function(k){return !(context==="heavy"&&k==="groove");}).map(function(k){return {v:k,l:RAIL_TYPES[k].label};})}/></div>
-              <div><Lbl>Track Form</Lbl><Sel value={trackMode} onChange={handleTrackModeChange} opts={Object.keys(TRACK_MODES).filter(function(k){return !(context==="heavy"&&k==="embedded");}).map(function(k){return {v:k,l:TRACK_MODES[k].label};})}/></div>
-              <div><Lbl>Line speed (km/h)</Lbl><Inp value={speed} onChange={setSp} min={20} max={320}/></div>
-              <div>
-                <Lbl>Flange Lubrication</Lbl>
-                <Sel value={lubr} onChange={setLb} opts={Object.keys(LUBRICATION).map(function(k){return {v:k,l:LUBRICATION[k].label};})}/>
-                <div style={{fontSize:11,color:cl.dim,marginTop:5}}>{lubr==="none"&&"No lateral wear reduction - dry conditions"}{lubr==="poor"&&"Badly maintained - low reduction"}{lubr==="standard"&&"Correctly adjusted wayside - significant reduction on tight curves"}{lubr==="good"&&"Wayside and onboard combined - good coverage"}{lubr==="optimal"&&"Lab conditions only - unrealistic in revenue service"}</div>
-              </div>
-              {context==="heavy"&&<div style={{fontSize:11,color:cl.dim,background:"rgba(125,211,200,0.05)",borderRadius:6,padding:"8px 10px",border:"1px solid rgba(125,211,200,0.1)"}}>Heavy rail is currently restricted to Vignole rail with Ballasted or Slab track.</div>}
-              {context==="metro"&&(railType==="groove"||trackMode==="embedded")&&<div style={{fontSize:11,color:cl.amber,background:"rgba(251,191,36,0.08)",borderRadius:6,padding:"8px 10px",border:"1px solid rgba(251,191,36,0.18)"}}>Atypical metro configuration. Use groove rail or embedded track only for special urban or depot cases.</div>}
-              <div style={{fontSize:11,color:cl.dim,background:"rgba(125,211,200,0.05)",borderRadius:6,padding:"8px 10px",border:"1px solid rgba(125,211,200,0.1)"}}>Rail hardness (grade) is set per segment in the section above</div>
-            </div>
-          </Card>
-
           <Card title="Initial Rail Condition">
             <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14,padding:"10px 14px",background:isBF?"rgba(251,191,36,0.08)":"rgba(125,211,200,0.05)",borderRadius:8,border:"1px solid "+(isBF?"rgba(251,191,36,0.25)":"rgba(125,211,200,0.12)")}}>
               <div onClick={function(){setBF(function(v){return !v;});}} style={{width:36,height:20,borderRadius:10,background:isBF?cl.amber:"rgba(255,255,255,0.1)",position:"relative",cursor:"pointer",flexShrink:0,border:"1px solid "+(isBF?cl.amber:"rgba(255,255,255,0.2)")}}>
@@ -5030,7 +5198,7 @@ export default function App() {
                 <div style={{fontSize:11,color:cl.dim,marginBottom:12}}>Enter current measured values for each active segment.</div>
                 {segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(seg){
                   var ic=initCond[seg.id]||{wearV:0,wearL:0,rcf:0,mgt:0};
-                  var lim=Object.assign({},LIMITS[context],customLimActive&&customLimV?{v:customLimV}:{},customLimActive&&customLimL?{l:customLimL}:{});
+                  var lim=Object.assign({},activeRailSectionDefaults.limits,customLimActive&&customLimV?{v:customLimV}:{},customLimActive&&customLimL?{l:customLimL}:{});
                   var health=Math.max(ic.wearV/lim.v,ic.wearL/lim.l,ic.rcf);
                   var hcol=health<0.4?cl.green:health<0.7?cl.amber:cl.warn;
                   var hlbl=health<0.4?"GOOD":health<0.7?"MODERATE":"POOR";
@@ -5123,14 +5291,6 @@ export default function App() {
             {specialZones.length>0&&<div style={{fontSize:10,color:"#4a6a74",marginTop:8}}>Special zones appear as additional segments in the simulation results, clearly labelled with their zone type badge.</div>}
           </Card>
 
-          <Card title="Maintenance Strategy">
-            <div style={{display:"flex",gap:8,marginBottom:10}}>
-              <Btn onClick={function(){setSt("preventive");}} active={strategy==="preventive"}>Preventive</Btn>
-              <Btn onClick={function(){setSt("corrective");}} active={strategy==="corrective"}>Corrective</Btn>
-            </div>
-            <div style={{fontSize:12,color:cl.dim,lineHeight:1.6}}>{strategy==="preventive"?"Frequent grinding (short intervals). 1 light pass ~0.2mm. RCF kept low. Maximum rail life.":"Condition-based corrective grinding. Tram/metro trigger on vertical wear and/or RCF; heavy rail also uses band-based early RCF triggers. Up to 4 heavy passes depending on severity."}</div>
-            <div style={{marginTop:12}}><Lbl>Simulation horizon (years)</Lbl><Inp value={horizon} onChange={setHz} min={5} max={50}/></div>
-          </Card>
         </div>
 
         <div>
@@ -5238,8 +5398,8 @@ export default function App() {
                             <YAxis stroke="#4a6a74" tick={{fontSize:11}} unit=" mm"/>
                             <Tooltip content={<Tip/>}/>
                             <Legend wrapperStyle={{fontSize:11}}/>
-                            {(function(){var g=asr&&asr.seg?(asr.seg.railGrade||asr.seg.grade||"R260"):"R260";var mv=customResActive?(customMinRes||3.0):(MIN_RES_V[g]||3.0);return <ReferenceLine y={mv} stroke={cl.warn} strokeDasharray="4 4" label={{value:"Min V "+mv.toFixed(1)+"mm",fill:cl.warn,fontSize:9}}/>;})()}
-                            {reprActive&&(function(){var g=asr&&asr.seg?(asr.seg.railGrade||asr.seg.grade||"R260"):"R260";var ml=customResActive?(customMinRes||3.0):(MIN_RES_L[g]||3.0);return <ReferenceLine y={ml} stroke="#38bdf8" strokeDasharray="4 4" label={{value:"Min L "+ml.toFixed(1)+"mm",fill:"#38bdf8",fontSize:9}}/>;})()}
+                            {(function(){var mv=customResActive?(customMinRes||3.0):(activeRailSectionDefaults.minResV||3.0);return <ReferenceLine y={mv} stroke={cl.warn} strokeDasharray="4 4" label={{value:"Min V "+mv.toFixed(1)+"mm",fill:cl.warn,fontSize:9}}/>;})()}
+                            {reprActive&&(function(){var ml=customResActive?(customMinRes||3.0):(activeRailSectionDefaults.minResL||3.0);return <ReferenceLine y={ml} stroke="#38bdf8" strokeDasharray="4 4" label={{value:"Min L "+ml.toFixed(1)+"mm",fill:"#38bdf8",fontSize:9}}/>;})()}
                             <Line type="monotone" dataKey="res"  name="Vertical reserve (mm)" stroke={cl.purple} strokeWidth={2} dot={false}/>
                             {reprActive&&<Line type="monotone" dataKey="resL" name="Lateral reserve (mm)" stroke="#38bdf8" strokeWidth={2} dot={false} strokeDasharray="5 3"/>}
                           </LineChart>
@@ -5279,7 +5439,7 @@ export default function App() {
                     {ctab==="tcost"&&trackMode==="ballast"&&viewResult&&<TampingCostPanel segs={viewResult.results.map(function(r){return r.seg;})} result={viewResult} horizon={horizon} context={context} platform={tPlatform} appoint={tAppoint} degCycles={tDegCycles} globalSpeed={speed} currencyMap={currencyMap} currency={sharedCurrency} initMachine={tcMachineKey} initMode={tcMode} initRegion={tcRegion} initNight={tcNight} initBallastPxOv={tcBallastPxOv} initCOpPerMl={tcCOpPerMl} initCMobilFix={tcCMobilFix} initCDegarnMl={tcCDegarnMl} initOwnManual={tcOwnManual} initOwnFuelLph={tcOwnFuelLph} initOwnGasoil={tcOwnGasoil} initOwnMaintH={tcOwnMaintH} initOwnLabourH={tcOwnLabourH} initOwnProdMlH={tcOwnProdMlH} onParamsChange={function(p){ if(p.machineKey!==undefined) setTCMachine(p.machineKey); if(p.mode!==undefined) setTCMode(p.mode); if(p.region!==undefined) setTCRegion(p.region); if(p.nightHrs!==undefined) setTCNight(p.nightHrs); if(p.ballastPxOv!==undefined) setTCBallPx(p.ballastPxOv); if(p.cOpPerMl!==undefined) setTCCOp(p.cOpPerMl); if(p.cMobilFix!==undefined) setTCCMF(p.cMobilFix); if(p.cDegarnMl!==undefined) setTCCDeg(p.cDegarnMl); if(p.ownManual!==undefined) setTCOwnManual(p.ownManual); if(p.ownFuelLph!==undefined) setTCOwnFuel(p.ownFuelLph); if(p.ownGasoil!==undefined) setTCOwnGasoil(p.ownGasoil); if(p.ownMaintH!==undefined) setTCOwnMaint(p.ownMaintH); if(p.ownLabourH!==undefined) setTCOwnLab(p.ownLabourH); if(p.ownProdMlH!==undefined) setTCOwnProd(p.ownProdMlH); }}/>}
                     {ctab==="tcost"&&trackMode==="ballast"&&!viewResult&&<div style={{padding:40,textAlign:"center",color:"#6b9ea8",fontSize:13}}>Run the simulation first to see tamping costs.</div>}
                     {ctab==="tcost"&&trackMode!=="ballast"&&<div style={{padding:40,textAlign:"center",color:"#fbbf24",fontSize:13}}>Tamping Cost is only available for ballast track.</div>}
-                    {ctab==="cmp"&&<ComparePanel simResult={viewResult} horizon={horizon} context={context} params={{context:context,trains:trains,segments:segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){var b=Object.assign({},s,{radius:s.repr,railGrade:s.grade});if(isBF&&initCond[s.id]){var ic=initCond[s.id];b.initWearV=ic.wearV||0;b.initWearL=ic.wearL||0;b.initRCF=ic.rcf||0;b.initMGT=ic.mgt||0;}return b;}).concat(specialZones.filter(function(z){return z.lengthM>0;}).map(function(z){return {id:z.id,label:z.name,radius:z.radius||9000,railGrade:z.grade||"R260",lengthKm:z.lengthM/1000,speed:z.speed||speed,fVExtra:z.fVExtra,corrugationMGT:z.corrugation?z.corrMGT:null,isSpecialZone:true,zoneType:z.type};})),strategy:strategy,railType:railType,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon,customLimV:customLimActive?customLimV:null,customLimL:customLimActive?customLimL:null,customResActive:customResActive,customMinRes:customMinRes}} grindEurPerMl={liveGrindRate} replEurPerMl={liveReplRate} grindCostParams={liveGrindCost} calcReplRate={calcReplRateForGrade} currency={sharedCurrency} currencyMap={currencyMap} reprActive={reprActive} reprThresh={reprThresh} reprRemL={reprRemL} reprRemV={reprRemV} reprRcfR={reprRcfR} reprSkip={reprSkip} reprRadiusBased={reprRadiusBased} reprRemLByBand={reprRemLByBand} liveReprRate={liveReprRate} liveReprMobil={liveReprMobil} ignoreSameYearGrinding={ignoreReplYearGrinding} ignoreSameYearReprofiling={ignoreReplYearReprofiling}/>}
+                    {ctab==="cmp"&&<ComparePanel simResult={viewResult} horizon={horizon} context={context} params={{context:context,trains:trains,segments:segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){var b=Object.assign({},s,{radius:s.repr,railGrade:s.grade});if(isBF&&initCond[s.id]){var ic=initCond[s.id];b.initWearV=ic.wearV||0;b.initWearL=ic.wearL||0;b.initRCF=ic.rcf||0;b.initMGT=ic.mgt||0;}return b;}).concat(specialZones.filter(function(z){return z.lengthM>0;}).map(function(z){return {id:z.id,label:z.name,radius:z.radius||9000,railGrade:z.grade||"R260",lengthKm:z.lengthM/1000,speed:z.speed||speed,fVExtra:z.fVExtra,corrugationMGT:z.corrugation?z.corrMGT:null,isSpecialZone:true,zoneType:z.type};})),strategy:strategy,railType:railType,railProfile:railProfile,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon,customLimV:customLimActive?customLimV:null,customLimL:customLimActive?customLimL:null,customResActive:customResActive,customMinRes:customMinRes}} grindEurPerMl={liveGrindRate} replEurPerMl={liveReplRate} grindCostParams={liveGrindCost} calcReplRate={calcReplRateForGrade} currency={sharedCurrency} currencyMap={currencyMap} reprActive={reprActive} reprThresh={reprThresh} reprRemL={reprRemL} reprRemV={reprRemV} reprRcfR={reprRcfR} reprSkip={reprSkip} reprRadiusBased={reprRadiusBased} reprRemLByBand={reprRemLByBand} liveReprRate={liveReprRate} liveReprMobil={liveReprMobil} ignoreSameYearGrinding={ignoreReplYearGrinding} ignoreSameYearReprofiling={ignoreReplYearReprofiling}/>}
                   </div>
                   <div style={{background:"rgba(0,0,0,0.15)",borderRadius:10,border:"1px solid rgba(125,211,200,0.08)",overflow:"hidden"}}>
                     <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)",fontSize:11,letterSpacing:2,color:cl.teal,textTransform:"uppercase",fontWeight:700}}>Summary - All Segments</div>
