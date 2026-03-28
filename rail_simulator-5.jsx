@@ -52,6 +52,35 @@ var SPECIAL_ZONE_TYPES = {
   terminus:  { label:"Terminus / reversing zone (mixed)",   fVExtra:3.0, fVRange:[2.0,4.0], corrMGT:6,  icon:"T" },
   transition:{ label:"Transition zone (curve to tangent)",  fVExtra:1.4, fVRange:[1.1,2.0], corrMGT:20, icon:"X" },
 };
+var CORRUGATION_BANDS = {
+  "10-30":    { label:"10-30 mm",    trigger:0.03, resetFrac:0.25, growth:0.0030 },
+  "30-100":   { label:"30-100 mm",   trigger:0.05, resetFrac:0.25, growth:0.0022 },
+  "100-300":  { label:"100-300 mm",  trigger:0.08, resetFrac:0.30, growth:0.0015 },
+  "300-1000": { label:"300-1000 mm", trigger:0.15, resetFrac:0.35, growth:0.0010 },
+};
+var SPECIAL_ZONE_CORRUGATION_FACTOR = {
+  braking: 1.4,
+  accel: 1.1,
+  terminus: 1.6,
+  transition: 0.9,
+};
+function getDefaultCorrugationBand(type){
+  return type==="transition" ? "100-300" : "30-100";
+}
+function getCorrugationGuidance(type, bandKey){
+  var band = CORRUGATION_BANDS[bandKey] || CORRUGATION_BANDS[getDefaultCorrugationBand(type)] || CORRUGATION_BANDS["30-100"];
+  var recommendedBand = getDefaultCorrugationBand(type);
+  var currentHint = type==="terminus"
+    ? "If no measurement exists: start at 0.000 for a clean zone, around 0.020-0.030 mm if corrugation is already audible, near trigger only if grinding is already due."
+    : (type==="transition"
+      ? "If no measurement exists: start at 0.000 for a clean zone, around 0.020-0.040 mm for visible medium-wave roughness."
+      : "If no measurement exists: start at 0.000 for a clean zone, around 40-60% of trigger for a moderate recurring defect, near trigger only if grinding is already due.");
+  return {
+    recommendedBand: recommendedBand,
+    recommendedTrigger: band.trigger,
+    currentHint: currentHint,
+  };
+}
 function getSpecialZoneDefaultSpeed(type, lineSpeed) {
   var vLine = Math.max(20, +(lineSpeed||80));
   if(type==="terminus") return Math.min(vLine, 25);
@@ -449,8 +478,13 @@ function runSim(params) {
     wrV = wrV * fVExtra;
 
     var gi=rb.grind[params.context]||999;
-    // Corrugation: override preventive grinding interval if configured
+    // Corrugation special-zone state
     var corrMGT = seg.corrugationMGT || null;
+    var corrBandKey = seg.corrugationBand || getDefaultCorrugationBand(seg.zoneType||"braking");
+    var corrBandCfg = CORRUGATION_BANDS[corrBandKey] || CORRUGATION_BANDS["30-100"];
+    var corrTriggerAmp = seg.corrugation ? +(seg.corrugationTriggerAmp!=null ? seg.corrugationTriggerAmp : corrBandCfg.trigger) : null;
+    var corrResetFrac = seg.corrugation ? +(seg.corrugationResetFrac!=null ? seg.corrugationResetFrac : corrBandCfg.resetFrac) : null;
+    var corrGrowth = seg.corrugation ? corrBandCfg.growth * (SPECIAL_ZONE_CORRUGATION_FACTOR[seg.zoneType] || 1.0) : 0;
     var gMGT = (params.strategy==="preventive" && corrMGT)
       ? corrMGT
       : (params.strategy==="preventive" ? gi : gi*3);
@@ -467,6 +501,7 @@ function runSim(params) {
       : 0;
     var segReprRemV = segReprRemL * 0.30; // vertical removal = 30% of lateral (Speno TB-2019-04)
     var wV=seg.initWearV||0, wL=seg.initWearL||0, rcf=Math.min(seg.initRCF||0,0.99);
+    var corrAmp = seg.corrugation ? +(seg.initCorrAmp||0) : 0;
     var res=Math.max(minResV+0.5,resI-(wV*0.8)), resL=Math.max(minResL+0.5,resLI-(wL*0.7));
     var mgtSG=0, totMGT=seg.initMGT||0, pgLeft=0, gCnt=0, reprCnt=0, reprFlag=false, repY=null, data=[];
     var specialCorrectiveArmedWV = true, specialCorrectiveArmedRCF = true;
@@ -475,6 +510,9 @@ function runSim(params) {
       var wf=pgLeft>0?gp.pwf:1.0; pgLeft=Math.max(0,pgLeft-mgtPY);
       wV+=(mgtPY/100)*wrV*wf; wL+=(mgtPY/100)*wrL*wf;
       var wp=Math.min(0.80,wrV*wf/5.0); rcf=Math.min(1.0,rcf+rcfBase*mgtPY*(1.0-wp));
+      if(seg.corrugation){
+        corrAmp = Math.max(0, corrAmp + corrGrowth * mgtPY);
+      }
       // Reprofiling: restores lateral AND vertical profile
       var reprofiled=false;
       if(reprActive&&segReprRemL>0&&wL>=reprThreshFrac*limits.l&&(resL-segReprRemL)>=minResL&&(res-segReprRemV)>=minResV){
@@ -484,10 +522,12 @@ function runSim(params) {
         pgLeft=gi*0.70;
         reprCnt++; reprFlag=true; reprofiled=true;
       }
-      var ground=false, grindCause=null, grindPasses=0, preGrindRCF=null, postGrindRCF=null, preGrindWearV=null, postGrindWearV=null;
+      var ground=false, grindCause=null, grindPasses=0, preGrindRCF=null, postGrindRCF=null, preGrindWearV=null, postGrindWearV=null, preGrindCorrAmp=null, postGrindCorrAmp=null;
       var grindByMGT = params.strategy==="preventive" && mgtSG>=gMGT;
       var grindByHeavyRCF = params.strategy==="corrective" && params.context==="heavy" && rcf>=(HEAVY_RCF_GRIND_TRIGGER[rb.id]||RCF_MAX);
-      var grindByCorrugation = params.strategy==="corrective" && seg.isSpecialZone && params.context!=="heavy" && corrMGT && mgtSG>=corrMGT;
+      var grindByCorrugationAmp = !!(seg.corrugation && corrTriggerAmp!=null && corrAmp>=corrTriggerAmp);
+      var grindByCorrugationMGT = !!(params.strategy==="corrective" && seg.isSpecialZone && corrMGT && mgtSG>=corrMGT);
+      var grindByCorrugation = grindByCorrugationAmp || grindByCorrugationMGT;
       var baseCorrectiveTrigger = CORRECTIVE_GRIND_TRIGGER[params.context] || null;
       var correctiveTrigger = seg.isSpecialZone && params.strategy==="corrective" && params.context!=="heavy"
         ? (SPECIAL_ZONE_CORRECTIVE_TRIGGER[params.context] || baseCorrectiveTrigger)
@@ -514,16 +554,21 @@ function runSim(params) {
         else{
           preGrindRCF = rcf;
           preGrindWearV = wV;
+          preGrindCorrAmp = seg.corrugation ? corrAmp : null;
           var corrugationOnly = grindByCorrugation && !grindByHeavyRCF && !specialZoneWvTrigger && !specialZoneRcfTrigger && !standardWvTrigger && !standardRcfTrigger;
           var passes=params.strategy==="corrective"
             ? (corrugationOnly ? 1 : Math.max(1,Math.min(4,Math.ceil(rcf/0.12))))
             : 1;
           var rem=passes*gp.rem;
           res-=rem; rcf=Math.max(0,rcf-passes*gp.rcfR*(1.0+(1.0-rcf)*0.5)); wV=Math.max(0,wV-rem*0.2);
+          if(seg.corrugation && corrTriggerAmp!=null && corrResetFrac!=null){
+            corrAmp = corrTriggerAmp * corrResetFrac;
+          }
           pgLeft=gp.pmgt; mgtSG=0; gCnt++; ground=true; reprFlag=false;
           grindPasses = passes;
           postGrindRCF = rcf;
           postGrindWearV = wV;
+          postGrindCorrAmp = seg.corrugation ? corrAmp : null;
           if(grindByMGT) grindCause = "MGT";
           else if(grindByHeavyRCF) grindCause = "RCF heavy";
           else if(corrugationOnly) grindCause = "corrugation";
@@ -548,10 +593,10 @@ function runSim(params) {
       }
       // Replacement: vertical wear, lateral wear, reserve exhausted (V or L), or RCF critical
       var repl=wV>=limits.v||wL>=limits.l||res<=minResV||resL<=minResL||rcf>=RCF_MAX;
-      data.push({year:y,mgt:+totMGT.toFixed(2),wearV:+Math.min(wV,limits.v).toFixed(3),wearL:+Math.min(wL,limits.l).toFixed(3),rcf:+Math.min(rcf,1).toFixed(3),res:+Math.max(0,res).toFixed(2),resL:+Math.max(0,resL).toFixed(2),ground:ground?1:0,reprofiled:(reprofiled&&!repl)?1:0,repl:repl?1:0,grindCause:grindCause,grindPasses:grindPasses,preGrindRCF:preGrindRCF!==null?+preGrindRCF.toFixed(3):null,postGrindRCF:postGrindRCF!==null?+postGrindRCF.toFixed(3):null,preGrindWearV:preGrindWearV!==null?+Math.min(preGrindWearV,limits.v).toFixed(3):null,postGrindWearV:postGrindWearV!==null?+Math.min(postGrindWearV,limits.v).toFixed(3):null});
+      data.push({year:y,mgt:+totMGT.toFixed(2),wearV:+Math.min(wV,limits.v).toFixed(3),wearL:+Math.min(wL,limits.l).toFixed(3),rcf:+Math.min(rcf,1).toFixed(3),corrAmp:seg.corrugation?+corrAmp.toFixed(4):null,corrTrigger:seg.corrugation&&corrTriggerAmp!=null?+corrTriggerAmp.toFixed(4):null,res:+Math.max(0,res).toFixed(2),resL:+Math.max(0,resL).toFixed(2),ground:ground?1:0,reprofiled:(reprofiled&&!repl)?1:0,repl:repl?1:0,grindCause:grindCause,grindPasses:grindPasses,preGrindRCF:preGrindRCF!==null?+preGrindRCF.toFixed(3):null,postGrindRCF:postGrindRCF!==null?+postGrindRCF.toFixed(3):null,preGrindWearV:preGrindWearV!==null?+Math.min(preGrindWearV,limits.v).toFixed(3):null,postGrindWearV:postGrindWearV!==null?+Math.min(postGrindWearV,limits.v).toFixed(3):null,preGrindCorrAmp:preGrindCorrAmp!==null?+preGrindCorrAmp.toFixed(4):null,postGrindCorrAmp:postGrindCorrAmp!==null?+postGrindCorrAmp.toFixed(4):null});
       if(repl&&!repY){repY=y;break;}
     }
-    return {seg:seg,rb:rb,wrV:wrV,wrL:wrL,he:he,segSpeed:segSpeed,mgtPY:mgtPY,eqPY:eqPY,gCount:gCnt,reprCount:reprCnt,repY:repY,data:data,limits:limits,resL:+resL.toFixed(2),railProfile:railSection.profileKey};
+    return {seg:seg,rb:rb,wrV:wrV,wrL:wrL,he:he,segSpeed:segSpeed,mgtPY:mgtPY,eqPY:eqPY,gCount:gCnt,reprCount:reprCnt,repY:repY,data:data,limits:limits,resL:+resL.toFixed(2),railProfile:railSection.profileKey,corrugationBand:corrBandKey};
   });
   return {results:results,mgtPY:mgtPY,eqPY:eqPY};
 }
@@ -565,7 +610,7 @@ function Lbl(p){return <div style={{fontSize:11,color:cl.muted,marginBottom:4,fo
 function Inp(p){var t=p.type||"number";return <input type={t} value={p.value} placeholder={p.ph||""} onChange={function(e){p.onChange(t==="number"?+e.target.value:e.target.value);}} min={p.min} max={p.max} step={p.step||1} style={iS}/>;}
 function Sel(p){return <select value={p.value} onChange={function(e){p.onChange(e.target.value);}} style={{background:"#1a2830",border:"1px solid rgba(255,255,255,0.12)",borderRadius:6,color:"#e8f4f3",padding:"7px 10px",fontSize:13,width:"100%",outline:"none",cursor:"pointer"}}>{p.opts.map(function(o){return <option key={o.v} value={o.v}>{o.l}</option>;})}</select>;}
 function Btn(p){return <button onClick={p.onClick} style={{background:p.active?cl.teal:"rgba(255,255,255,0.06)",color:p.active?"#0d1f26":cl.text,border:"1px solid "+(p.active?cl.teal:"rgba(255,255,255,0.15)"),borderRadius:6,padding:p.sm?"5px 12px":"8px 18px",fontSize:p.sm?12:13,fontWeight:600,cursor:"pointer"}}>{p.children}</button>;}
-function Card(p){return <div style={{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"18px 20px",marginBottom:16}}><div style={{fontSize:10,fontWeight:700,letterSpacing:3,color:cl.teal,textTransform:"uppercase",marginBottom:14}}>{p.title}</div>{p.children}</div>;}
+function Card(p){return <div style={Object.assign({background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"18px 20px",marginBottom:16},p.style||{})}><div style={{fontSize:10,fontWeight:700,letterSpacing:3,color:cl.teal,textTransform:"uppercase",marginBottom:14}}>{p.title}</div>{p.children}</div>;}
 function Kpi(p){var c=p.warn?cl.warn:cl.teal;return <div style={{background:p.warn?"rgba(248,113,113,0.08)":"rgba(125,211,200,0.05)",border:"1px solid "+(p.warn?"rgba(248,113,113,0.25)":"rgba(125,211,200,0.15)"),borderRadius:8,padding:"10px 14px",flex:1,minWidth:100}}><div style={{fontSize:10,color:p.warn?cl.warn:cl.dim,letterSpacing:2,textTransform:"uppercase",marginBottom:4}}>{p.label}</div><div style={{fontSize:18,fontWeight:700,color:c,fontFamily:"monospace"}}>{p.value}<span style={{fontSize:11,fontWeight:400,marginLeft:4,color:cl.muted}}>{p.unit}</span></div></div>;}
 function RCFBadge(p){var c=p.v<0.3?cl.green:p.v<0.7?cl.amber:cl.warn,l=p.v<0.3?"HEALTHY":p.v<0.7?"MODERATE":"CRITICAL";return <span style={{background:c+"22",color:c,border:"1px solid "+c+"55",borderRadius:4,padding:"2px 7px",fontSize:10,fontWeight:700}}>{l}</span>;}
 function Tip(p){
@@ -580,6 +625,7 @@ function Tip(p){
         {row.grindCause&&<div style={{color:cl.text,marginBottom:2}}>Cause: <b>{row.grindCause}</b></div>}
         {row.preGrindRCF!==null&&row.preGrindRCF!==undefined&&<div style={{color:cl.warn,marginBottom:2}}>RCF pre/post: <b>{row.preGrindRCF.toFixed(3)}</b>{" -> "}<b>{row.postGrindRCF.toFixed(3)}</b></div>}
         {row.preGrindWearV!==null&&row.preGrindWearV!==undefined&&<div style={{color:cl.teal,marginBottom:2}}>Wear V pre/post: <b>{row.preGrindWearV.toFixed(3)}</b>{" -> "}<b>{row.postGrindWearV.toFixed(3)}</b></div>}
+        {row.preGrindCorrAmp!==null&&row.preGrindCorrAmp!==undefined&&<div style={{color:cl.amber,marginBottom:2}}>Corrugation p-p pre/post: <b>{row.preGrindCorrAmp.toFixed(4)}</b>{" -> "}<b>{row.postGrindCorrAmp.toFixed(4)}</b> mm</div>}
         {row.grindPasses?<div style={{color:cl.dim}}>Passes: <b>{row.grindPasses}</b></div>:null}
       </div>
     ):null}
@@ -1625,7 +1671,7 @@ function GrindPanel(props) {
                   </tbody>
                   <tfoot>
                     <tr style={{borderTop:"2px solid rgba(125,211,200,0.2)",background:"rgba(125,211,200,0.04)"}}>
-                      <td colSpan={mode==="sub"?5:3} style={{padding:"10px 12px",color:cl.teal,fontWeight:700,fontSize:12}}>TOTAL</td>
+                      <td colSpan={4} style={{padding:"10px 12px",color:cl.teal,fontWeight:700,fontSize:12}}>TOTAL</td>
                       {mode==="sub"&&<td style={{padding:"10px 12px",fontFamily:"monospace",color:cl.amber,fontWeight:700}}>{fmt(totalMobil)}</td>}
                       {mode==="sub"&&<td style={{padding:"10px 12px",fontFamily:"monospace",color:cl.teal,fontWeight:700}}>{fmt(totalOp)}</td>}
                       <td style={{padding:"10px 12px",fontFamily:"monospace",color:cl.teal,fontWeight:800,fontSize:14}}>{fmt(totalGrind)}</td>
@@ -1889,7 +1935,7 @@ var HELP=[
    ]
   },
   {id:"rcf",title:"RCF - Rolling Contact Fatigue",
-   body:"DEFINITION: Cyclic plastic deformation at wheel-rail contact causing surface/sub-surface crack initiation. RCF index (0 to 1) = accumulated damage relative to failure threshold.\n\nRCF PARADOX (magic wear rate): Moderate curves (r4, R400-800m) have HIGHER RCF than tight curves (r1). Tight curves wear fast enough to remove the crack layer before propagation. Moderate curves initiate cracks but lack sufficient wear to remove them.\n\nRCF THRESHOLDS:\n- 0.0-0.3: Healthy - preventive grinding sufficient\n- 0.3-0.7: Moderate - corrective grinding required\n- 0.7-1.0: Critical - replacement mandatory (cracks >5-8mm deep)\n\nHEAVY CONTEXT EARLY-GRIND TRIGGERS:\n- r1: 0.45\n- r2: 0.32\n- r3: 0.30\n- r4: 0.32\n- r5: 0.38\nIn heavy rail, grinding is triggered when the MGT interval is reached OR when the segment RCF index reaches its band trigger, provided the rail still has sufficient vertical reserve and remains below replacement threshold.\n\nSPECIAL ZONES AND CORRUGATION:\nOn tram / metro special zones, corrugation risk can add a corrective trigger through corrMGT even when the RCF index remains below the normal corrective threshold. This is a pragmatic proxy for short-pitch surface defects that are not explicitly modelled as a separate roughness state variable.\n\nLUBRICATION EFFECT ON RCF:\nLubrication now also moderates RCF growth through a dedicated band-based factor. The effect is intentionally weaker than on lateral wear: it reduces damaging creepage and flange/gauge friction, but it is not treated as a direct cure for crown-contact fatigue.\n\nFORMULA: RCF_increment/yr = rcfBase x MGT x (1 - min(0.80, wearRate/5.0))\nwith rcfBase = ctx.rcfRate x grade.f_rcf x f_speed x f_lubr_rcf\nAfter grinding: RCF reduced by passes x rcfReduction x (1 + (1-RCF) x 0.5)",
+   body:"DEFINITION: Cyclic plastic deformation at wheel-rail contact causing surface/sub-surface crack initiation. RCF index (0 to 1) = accumulated damage relative to failure threshold.\n\nRCF PARADOX (magic wear rate): Moderate curves (r4, R400-800m) have HIGHER RCF than tight curves (r1). Tight curves wear fast enough to remove the crack layer before propagation. Moderate curves initiate cracks but lack sufficient wear to remove them.\n\nRCF THRESHOLDS:\n- 0.0-0.3: Healthy - preventive grinding sufficient\n- 0.3-0.7: Moderate - corrective grinding required\n- 0.7-1.0: Critical - replacement mandatory (cracks >5-8mm deep)\n\nHEAVY CONTEXT EARLY-GRIND TRIGGERS:\n- r1: 0.45\n- r2: 0.32\n- r3: 0.30\n- r4: 0.32\n- r5: 0.38\nIn heavy rail, grinding is triggered when the MGT interval is reached OR when the segment RCF index reaches its band trigger, provided the rail still has sufficient vertical reserve and remains below replacement threshold.\n\nSPECIAL ZONES AND CORRUGATION:\nSpecial zones can now carry a simplified corrugation amplitude state (peak-to-peak). When corrugation risk is active, the simulator tracks a wavelength band, annual amplitude growth and a grinding trigger amplitude. Grinding can therefore be caused by corrugation amplitude as well as by RCF or vertical wear, and the tooltip reports corrugation pre/post values.\n\nLUBRICATION EFFECT ON RCF:\nLubrication now also moderates RCF growth through a dedicated band-based factor. The effect is intentionally weaker than on lateral wear: it reduces damaging creepage and flange/gauge friction, but it is not treated as a direct cure for crown-contact fatigue.\n\nFORMULA: RCF_increment/yr = rcfBase x MGT x (1 - min(0.80, wearRate/5.0))\nwith rcfBase = ctx.rcfRate x grade.f_rcf x f_speed x f_lubr_rcf\nAfter grinding: RCF reduced by passes x rcfReduction x (1 + (1-RCF) x 0.5)",
    links:[
      {label:"Infrabel/Int.J.Fatigue (2025) - 212 instrumented curves analysis",url:"https://doi.org/10.1016/j.ijfatigue.2024.108342",type:"paper"},
      {label:"Ringsberg J.W. (2001) - Life prediction of RCF crack initiation, Int.J.Fatigue 23(7)",url:"https://doi.org/10.1016/S0142-1123(01)00011-5",type:"paper"},
@@ -1906,7 +1952,7 @@ var HELP=[
    ]
   },
   {id:"grinding",title:"Grinding Strategy",
-   body:"PREVENTIVE strategy:\n- Interval: base table per band/context (tram: r1 disabled, r2 12, r3 18, r4 28, r5 40 MGT | metro: r1 disabled, r2 18, r3 24, r4 36, r5 55 | heavy: r1 999, r2 20, r3 30, r4 50, r5 80)\n- Special zones with corrugation risk can override the preventive interval through corrMGT\n- Removal per pass: 0.20mm | Post-grind wear factor: 0.75 | RCF reduction: ~30%\n\nCORRECTIVE strategy:\n- Tram / metro: condition-based, not simple 3x interval. Triggered by vertical wear and/or RCF threshold; special zones can also trigger on corrugation MGT when corrugation risk is active\n- Heavy rail: triggered when the MGT cycle is reached OR when band RCF reaches the heavy threshold\n- Removal: 0.55mm/pass, up to 4 passes | Post-grind factor: 0.92\n- Corrugation-only corrective trigger on special zones is capped to 1 pass\n\nHEAVY RCF-BASED EARLY TRIGGER:\n- In heavy rail, grinding is triggered when the MGT cycle is reached OR when RCF reaches the band trigger\n- r1: 0.45 | r2: 0.32 | r3: 0.30 | r4: 0.32 | r5: 0.38\n- The early trigger remains bounded by reserve feasibility and does not override replacement once RCF reaches 0.70\n\nREPROFILING interaction:\n- Reprofiling restores crown AND gauge face -- next scheduled grinding pass is skipped (skip-next-grinding toggle, active by default)\n- Post-reprofiling wear factor: 0.70 (better than grinding alone -- wider contact ellipse restored)\n- reprRemV = reprRemL x 0.30 (Speno TB-2019-04 calibration)\n- R<100m: reprRemL=3.0mm -> reprRemV=0.9mm | R100-200m: 2.0->0.6mm | R200-400m: 1.0->0.3mm | R400-800m: 0.5->0.15mm | R>=800m: disabled in all modes",
+   body:"PREVENTIVE strategy:\n- Interval: base table per band/context (tram: r1 disabled, r2 12, r3 18, r4 28, r5 40 MGT | metro: r1 disabled, r2 18, r3 24, r4 36, r5 55 | heavy: r1 999, r2 20, r3 30, r4 50, r5 80)\n- Special zones with corrugation risk keep the legacy corrMGT fallback but can now also trigger on simulated corrugation amplitude\n- Removal per pass: 0.20mm | Post-grind wear factor: 0.75 | RCF reduction: ~30%\n\nCORRECTIVE strategy:\n- Tram / metro: condition-based, not simple 3x interval. Triggered by vertical wear and/or RCF threshold; special zones can also trigger on corrugation amplitude or corrMGT fallback when corrugation risk is active\n- Heavy rail: triggered when the MGT cycle is reached OR when band RCF reaches the heavy threshold\n- Removal: 0.55mm/pass, up to 4 passes | Post-grind factor: 0.92\n- Corrugation-only corrective trigger on special zones is capped to 1 pass\n\nHEAVY RCF-BASED EARLY TRIGGER:\n- In heavy rail, grinding is triggered when the MGT cycle is reached OR when RCF reaches the band trigger\n- r1: 0.45 | r2: 0.32 | r3: 0.30 | r4: 0.32 | r5: 0.38\n- The early trigger remains bounded by reserve feasibility and does not override replacement once RCF reaches 0.70\n\nREPROFILING interaction:\n- Reprofiling restores crown AND gauge face -- next scheduled grinding pass is skipped (skip-next-grinding toggle, active by default)\n- Post-reprofiling wear factor: 0.70 (better than grinding alone -- wider contact ellipse restored)\n- reprRemV = reprRemL x 0.30 (Speno TB-2019-04 calibration)\n- R<100m: reprRemL=3.0mm -> reprRemV=0.9mm | R100-200m: 2.0->0.6mm | R200-400m: 1.0->0.3mm | R400-800m: 0.5->0.15mm | R>=800m: disabled in all modes",
    links:[
      {label:"Grassie S.L. (2005) - Rail corrugation: measurement, understanding and treatment, Wear 258",url:"https://doi.org/10.1016/j.wear.2004.03.066",type:"paper"},
      {label:"Infrabel - Grinding Management Report (2022)",url:"https://www.infrabel.be/en/rail-safety",type:"report"},
@@ -1917,7 +1963,7 @@ var HELP=[
      {heading:"Preventive strategy - parameter detail",
       text:"Interval (MGT-based): The grinding interval is expressed in MGT, not calendar time, because traffic tonnage drives damage accumulation. A segment carrying 10 MGT/yr on r4 metro is ground every ~3.6 years (36 MGT base). The same segment at 5 MGT/yr is ground every ~7.2 years. On r1, preventive grinding is intentionally disabled for tram, metro and heavy because a pure vertical pass has little value in very tight curves where lateral wear and reprofiling dominate.\n\nHeavy rail addition: the simulator can trigger grinding before the nominal MGT interval if the segment RCF reaches its band threshold (r1 0.45, r2 0.32, r3 0.30, r4 0.32, r5 0.38).\n\nRemoval 0.20 mm/pass: This removes exactly the ratchetted surface layer where micro-cracks initiate. It is the minimum depth to reach sound material without unnecessarily consuming grinding reserve.\n\nPost-grinding wear factor 0.75: After reprofilage, the restored wheel-rail conformity distributes contact pressure over a wider ellipse, reducing local stress and future wear rate by ~25% for the next several MGT. Calibrated from Guangzhou Metro 2021 post-grinding monitoring.\n\nRCF reduction ~30%/pass: Each preventive pass physically removes the damaged layer, resetting the damage index downward. With a healthy bonus (RCF < 0.3), the reduction slightly exceeds 30% because cracks are still superficial and entirely within the removed layer."},
      {heading:"Corrective strategy - parameter detail",
-      text:"Tram / metro corrective logic is now condition-based. Standard segments trigger when vertical wear reaches the context threshold (tram 35% of V limit, metro 30%) or when RCF reaches 0.35 / 0.30 respectively. Special zones use a stricter vertical threshold (tram 45%, metro 40%) to avoid over-triggering from local fVExtra alone.\n\nSpecial zones with corrugation risk add a third corrective trigger: mgtSinceLastGrinding >= corrMGT. This keeps corrugation-sensitive areas active even when neither RCF nor vertical wear fully represents the surface defect. If corrugation is the only trigger, the intervention is limited to 1 pass.\n\nRemoval 0.55 mm/pass, up to 4 passes: deeper fissures require deeper material removal to reach sound sub-surface metal. The number of passes still scales with pre-grind RCF severity.\n\nPost-grinding factor 0.92 (only -8%): After deep corrective grinding, the sub-surface microstructure has been heavily strain-hardened by prolonged ratchetting cycles. This hardened layer provides less geometric benefit than a preventive reprofile, and it will re-crack faster in the next damage cycle."},
+      text:"Tram / metro corrective logic is now condition-based. Standard segments trigger when vertical wear reaches the context threshold (tram 35% of V limit, metro 30%) or when RCF reaches 0.35 / 0.30 respectively. Special zones use a stricter vertical threshold (tram 45%, metro 40%) to avoid over-triggering from local fVExtra alone.\n\nSpecial zones with corrugation risk add a third corrective path through simulated corrugation amplitude. The legacy corrMGT remains as a fallback, but the main local trigger is now the peak-to-peak amplitude crossing its threshold for the selected wavelength band. If corrugation is the only trigger, the intervention is limited to 1 pass.\n\nRemoval 0.55 mm/pass, up to 4 passes: deeper fissures require deeper material removal to reach sound sub-surface metal. The number of passes still scales with pre-grind RCF severity.\n\nPost-grinding factor 0.92 (only -8%): After deep corrective grinding, the sub-surface microstructure has been heavily strain-hardened by prolonged ratchetting cycles. This hardened layer provides less geometric benefit than a preventive reprofile, and it will re-crack faster in the next damage cycle."},
      {heading:"Grinding reserve consumption comparison",
       text:"The grinding reserve is the total metal available for removal before the rail cross-section falls below the minimum acceptable profile. This is the ultimate constraint on rail life."},
      {table:[["","Preventive","Corrective"],
@@ -2055,7 +2101,7 @@ var HELP=[
    ]
   },
   {id:"limits",title:"Known Limitations",
-   body:"VERSION 1.2 - Annual time step.\n\nNOW MODELLED (v1.2 additions):\n- Reprofiling model: geometry-triggered, radius-based reprRemL, feasibility check, priority rule (replacement overrides same-year reprofiling)\n- reprRemV = reprRemL x 0.30 (calibrated on Speno TB-2019-04)\n- Radius-based reprRemL defaults: r1=3.0mm, r2=2.0mm, r3=1.0mm, r4=0.5mm, r5=0mm (configurable per band)\n- R>=800m reprofiling locked out for both standard segments and special zones\n- Tram / metro corrective grinding: condition-based logic on vertical wear and RCF instead of simple 3x preventive spacing\n- Special-zone corrective logic: optional corrugation trigger using corrMGT, plus debug traces for trigger cause and pre/post values in chart tooltips\n- Reserve thresholds configurable via toggle (min V and L, default 3.0-4.0mm by grade)\n- Reprofiling Cost tab with mobilisation\n- Metal reserve chart: dual V and L curves with dynamic reference lines\n- Schedule chart: Grinding / Reprofiling / Replacement bars\n- Strategy Comparison: reprofiling costs in KPIs and tables\n- Summary table: Reprofiling cost column\n\nNOT MODELLED:\n- Inner/outer rail asymmetry: outer rail always critical. Inner ~30-60% of outer rate.\n- Wheel profile evolution over time.\n- Seasonal variation: autumn leaf fall +15-25% wear; winter ice alters friction mode.\n- Switch and crossing wear: different mechanisms, out of scope.\n- Corrugation remains represented through special-zone triggers, not through an explicit surface roughness state variable.\n- Rail inclination / canting effects on contact geometry.\n- Temperature effects on rail steel properties.\n- Annual time step can still smooth short-term trigger sequencing within a given year.\n\nSCOPE: Calibrated on European heavy rail (Belgium) and Chinese metro. Validate locally for other contexts.\n\nCOST DATA: Rates based on 2022-2023. Live exchange rates via exchangerate-api.com.",
+   body:"VERSION 1.2 - Annual time step.\n\nNOW MODELLED (v1.2 additions):\n- Reprofiling model: geometry-triggered, radius-based reprRemL, feasibility check, priority rule (replacement overrides same-year reprofiling)\n- reprRemV = reprRemL x 0.30 (calibrated on Speno TB-2019-04)\n- Radius-based reprRemL defaults: r1=3.0mm, r2=2.0mm, r3=1.0mm, r4=0.5mm, r5=0mm (configurable per band)\n- R>=800m reprofiling locked out for both standard segments and special zones\n- Tram / metro corrective grinding: condition-based logic on vertical wear and RCF instead of simple 3x preventive spacing\n- Special-zone corrugation state: wavelength band, peak-to-peak amplitude, trigger threshold, annual growth and post-grinding reset\n- Corrugation-driven grinding is included in Schedule, Grinding Cost, Strategy Comparison and Summary tables through the normal grinding event pipeline\n- Reserve thresholds configurable via toggle (min V and L, default 3.0-4.0mm by grade)\n- Reprofiling Cost tab with mobilisation\n- Metal reserve chart: dual V and L curves with dynamic reference lines\n- Schedule chart: Grinding / Reprofiling / Replacement bars\n- Strategy Comparison: reprofiling costs in KPIs and tables\n- Summary table: Reprofiling cost column\n\nNOT MODELLED:\n- Inner/outer rail asymmetry: outer rail always critical. Inner ~30-60% of outer rate.\n- Wheel profile evolution over time.\n- Seasonal variation: autumn leaf fall +15-25% wear; winter ice alters friction mode.\n- Switch and crossing wear: different mechanisms, out of scope.\n- Corrugation is still a simplified state model: no explicit wavelength spectrum, no RMS roughness law, no vehicle-track dynamic instability solver.\n- Rail inclination / canting effects on contact geometry.\n- Temperature effects on rail steel properties.\n- Annual time step can still smooth short-term trigger sequencing within a given year.\n\nSCOPE: Calibrated on European heavy rail (Belgium) and Chinese metro. Validate locally for other contexts.\n\nCOST DATA: Rates based on 2022-2023. Live exchange rates via exchangerate-api.com.",
    links:[
      {label:"RSSB T1009 - Rail wear database (UK network)",url:"https://www.rssb.co.uk/research-catalogue/CatalogueItem/T1009",type:"report"},
      {label:"FRA Track Safety Standards (US DOT)",url:"https://railroads.dot.gov/safety/track-safety/track-safety-standards",type:"standard"},
@@ -2730,7 +2776,7 @@ function ComparePanel(props) {
     lubrication:  params.lubrication,
     horizonYears: params.horizonYears,
     segKeys: (params.segments||[]).map(function(s){
-      return s.id+"_"+s.radius+"_"+s.railGrade+"_"+(s.initWearV||0)+"_"+(s.initRCF||0);
+      return s.id+"_"+s.radius+"_"+s.railGrade+"_"+(s.initWearV||0)+"_"+(s.initRCF||0)+"_"+(s.corrugation?1:0)+"_"+(s.corrugationMGT||0)+"_"+(s.corrugationBand||"")+"_"+(s.initCorrAmp||0)+"_"+(s.corrugationTriggerAmp||0);
     }).join("|"),
     reprActive:      props.reprActive,
     reprThresh:      props.reprThresh,
@@ -4038,7 +4084,12 @@ export default function App() {
         lengthKm: z.lengthM/1000,
         speed: z.speed || speed,
         fVExtra: z.fVExtra,
+        corrugation: !!z.corrugation,
         corrugationMGT: z.corrugation ? z.corrMGT : null,
+        corrugationBand: z.corrBand || getDefaultCorrugationBand(z.type),
+        initCorrAmp: z.corrAmp || 0,
+        corrugationTriggerAmp: z.corrTrigger,
+        corrugationResetFrac: z.corrResetFrac,
         isSpecialZone: true, zoneType: z.type,
       };
     });
@@ -4840,7 +4891,7 @@ export default function App() {
       )}
 
       <div style={{display:"grid",gridTemplateColumns:"360px 1fr",maxWidth:1400,margin:"0 auto",padding:"18px 18px 0"}}>
-        <div style={{paddingRight:16}}>
+        <div style={{paddingRight:16,gridColumn:1,gridRow:1}}>
 
           <Card title="Context">
             <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
@@ -5223,77 +5274,111 @@ export default function App() {
             )}
           </Card>
 
-          <Card title="Special Zones (Stations, Corrugation)">
-            <div style={{fontSize:11,color:cl.dim,marginBottom:10,lineHeight:1.6}}>Add station braking/acceleration zones, terminus areas, or transition zones. Each is simulated as an independent segment with an enhanced vertical wear factor.</div>
-            {specialZones.map(function(z){
-              var zt = SPECIAL_ZONE_TYPES[z.type] || SPECIAL_ZONE_TYPES.braking;
-              return (
-                <div key={z.id} style={{background:"rgba(255,255,255,0.03)",borderRadius:8,padding:"12px",marginBottom:10,border:"1px solid rgba(255,255,255,0.08)"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{fontSize:11,fontWeight:700,color:cl.amber,background:"rgba(251,191,36,0.15)",borderRadius:4,padding:"2px 7px"}}>{zt.icon}</span>
-                      <input value={z.name} onChange={function(e){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{name:e.target.value}):x;});});}} style={Object.assign({},iS,{width:160,fontSize:12})}/>
-                    </div>
-                    <button onClick={function(){setSpZ(function(a){return a.filter(function(x){return x.id!==z.id;});});}} style={{background:"none",border:"none",color:cl.warn,cursor:"pointer",fontSize:16}}>x</button>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
-                    <div>
-                      <Lbl>Zone type</Lbl>
-                      <Sel value={z.type} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{type:v,fVExtra:SPECIAL_ZONE_TYPES[v].fVExtra,corrMGT:SPECIAL_ZONE_TYPES[v].corrMGT,speed:getSpecialZoneDefaultSpeed(v, speed)}):x;});});}} opts={Object.keys(SPECIAL_ZONE_TYPES).map(function(k){return {v:k,l:SPECIAL_ZONE_TYPES[k].label};})}/>
-                    </div>
-                    <div>
-                      <Lbl>Rail grade</Lbl>
-                      <Sel value={z.grade} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{grade:v}):x;});});}} opts={Object.keys(RAIL_GRADES).map(function(k){return {v:k,l:k};})}/>
-                    </div>
-                    <div>
-                      <Lbl>Speed (km/h)</Lbl>
-                      <Inp value={z.speed||getSpecialZoneDefaultSpeed(z.type, speed)} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{speed:+v}):x;});});}} min={20} max={320}/>
-                    </div>
-                    <div>
-                      <Lbl>Zone length (m)</Lbl>
-                      <Inp value={z.lengthM} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{lengthM:v}):x;});});}} min={10} max={500} step={10}/>
-                    </div>
-                    <div>
-                      <Lbl>Radius (m, or 9000=tangent)</Lbl>
-                      <Inp value={z.radius} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{radius:v}):x;});});}} min={50} max={9000}/>
-                    </div>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                    <div>
-                      <Lbl>{"Wear factor f_V (preset: x"+zt.fVExtra.toFixed(1)+" for "+z.type+")"}</Lbl>
-                      <Inp value={z.fVExtra} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{fVExtra:Math.max(zt.fVRange[0],Math.min(zt.fVRange[1],v))}):x;});});}} min={zt.fVRange[0]} max={zt.fVRange[1]} step={0.1}/>
-                      <div style={{fontSize:10,color:cl.dim,marginTop:3}}>Range for this zone type: x{zt.fVRange[0]} to x{zt.fVRange[1]}</div>
-                    </div>
-                    <div>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                        <div onClick={function(){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{corrugation:!x.corrugation}):x;});});}} style={{width:26,height:15,borderRadius:8,background:z.corrugation?cl.amber:"rgba(255,255,255,0.1)",position:"relative",cursor:"pointer",border:"1px solid "+(z.corrugation?cl.amber:"rgba(255,255,255,0.2)")}}>
-                          <div style={{width:9,height:9,borderRadius:"50%",background:"#fff",position:"absolute",top:2,left:z.corrugation?13:2}}/>
-                        </div>
-                        <span style={{fontSize:11,color:z.corrugation?cl.amber:cl.dim}}>Corrugation risk</span>
-                      </div>
-                      {z.corrugation && (
-                        <div>
-                          <Lbl>Grinding interval (MGT)</Lbl>
-                          <Inp value={z.corrMGT} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{corrMGT:Math.max(1,v)}):x;});});}} min={1} max={50} step={0.5}/>
-                          <div style={{fontSize:10,color:cl.amber,marginTop:3}}>Sets the preventive interval and also adds a corrective corrugation trigger on this special zone. Preset: {zt.corrMGT} MGT</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              );
-            })}
-            <Btn onClick={function(){
-              var newId = "sz_"+Date.now();
-              var defType = "braking";
-              setSpZ(function(a){return a.concat([{id:newId,name:"Station zone "+(a.length+1),type:defType,lengthM:100,radius:9000,speed:getSpecialZoneDefaultSpeed(defType, speed),grade:"R260",fVExtra:SPECIAL_ZONE_TYPES[defType].fVExtra,corrugation:false,corrMGT:SPECIAL_ZONE_TYPES[defType].corrMGT}]);});
-            }} sm={true}>+ Add special zone</Btn>
-            {specialZones.length>0&&<div style={{fontSize:10,color:"#4a6a74",marginTop:8}}>Special zones appear as additional segments in the simulation results, clearly labelled with their zone type badge.</div>}
-          </Card>
-
         </div>
 
-        <div>
+        <Card title="Special Zones (Stations, Corrugation)" style={{gridColumn:"1 / span 2",gridRow:2}}>
+          <div style={{fontSize:11,color:cl.dim,marginBottom:10,lineHeight:1.6}}>Add station braking/acceleration zones, terminus areas, or transition zones. Each is simulated as an independent segment with an enhanced vertical wear factor.</div>
+          {specialZones.map(function(z){
+            var zt = SPECIAL_ZONE_TYPES[z.type] || SPECIAL_ZONE_TYPES.braking;
+            var corrGuide = getCorrugationGuidance(z.type, z.corrBand||getDefaultCorrugationBand(z.type));
+            return (
+              <div key={z.id} style={{background:"rgba(255,255,255,0.03)",borderRadius:8,padding:"12px",marginBottom:10,border:"1px solid rgba(255,255,255,0.08)"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{fontSize:11,fontWeight:700,color:cl.amber,background:"rgba(251,191,36,0.15)",borderRadius:4,padding:"2px 7px"}}>{zt.icon}</span>
+                    <input value={z.name} onChange={function(e){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{name:e.target.value}):x;});});}} style={Object.assign({},iS,{width:160,fontSize:12})}/>
+                  </div>
+                  <button onClick={function(){setSpZ(function(a){return a.filter(function(x){return x.id!==z.id;});});}} style={{background:"none",border:"none",color:cl.warn,cursor:"pointer",fontSize:16}}>x</button>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+                  <div>
+                    <Lbl>Zone type</Lbl>
+                    <Sel value={z.type} onChange={function(v){var defBand=getDefaultCorrugationBand(v);var cfg=CORRUGATION_BANDS[defBand]||CORRUGATION_BANDS["30-100"];setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{type:v,fVExtra:SPECIAL_ZONE_TYPES[v].fVExtra,corrMGT:SPECIAL_ZONE_TYPES[v].corrMGT,speed:getSpecialZoneDefaultSpeed(v, speed),corrBand:defBand,corrTrigger:cfg.trigger,corrResetFrac:cfg.resetFrac}):x;});});}} opts={Object.keys(SPECIAL_ZONE_TYPES).map(function(k){return {v:k,l:SPECIAL_ZONE_TYPES[k].label};})}/>
+                  </div>
+                  <div>
+                    <Lbl>Rail grade</Lbl>
+                    <Sel value={z.grade} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{grade:v}):x;});});}} opts={Object.keys(RAIL_GRADES).map(function(k){return {v:k,l:k};})}/>
+                  </div>
+                  <div>
+                    <Lbl>Speed (km/h)</Lbl>
+                    <Inp value={z.speed||getSpecialZoneDefaultSpeed(z.type, speed)} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{speed:+v}):x;});});}} min={20} max={320}/>
+                  </div>
+                  <div>
+                    <Lbl>Zone length (m)</Lbl>
+                    <Inp value={z.lengthM} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{lengthM:v}):x;});});}} min={10} max={500} step={10}/>
+                  </div>
+                  <div>
+                    <Lbl>Radius (m, or 9000=tangent)</Lbl>
+                    <Inp value={z.radius} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{radius:v}):x;});});}} min={50} max={9000}/>
+                  </div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:z.corrugation?"1fr":"1fr 1fr",gap:8}}>
+                  <div>
+                    <Lbl>{"Wear factor f_V (preset: x"+zt.fVExtra.toFixed(1)+" for "+z.type+")"}</Lbl>
+                    <Inp value={z.fVExtra} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{fVExtra:Math.max(zt.fVRange[0],Math.min(zt.fVRange[1],v))}):x;});});}} min={zt.fVRange[0]} max={zt.fVRange[1]} step={0.1}/>
+                    <div style={{fontSize:10,color:cl.dim,marginTop:3}}>Range for this zone type: x{zt.fVRange[0]} to x{zt.fVRange[1]}</div>
+                  </div>
+                  <div style={z.corrugation?{background:"rgba(251,191,36,0.05)",border:"1px solid rgba(251,191,36,0.12)",borderRadius:8,padding:"10px 12px"}:null}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                      <div onClick={function(){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{corrugation:!x.corrugation}):x;});});}} style={{width:26,height:15,borderRadius:8,background:z.corrugation?cl.amber:"rgba(255,255,255,0.1)",position:"relative",cursor:"pointer",border:"1px solid "+(z.corrugation?cl.amber:"rgba(255,255,255,0.2)")}}>
+                        <div style={{width:9,height:9,borderRadius:"50%",background:"#fff",position:"absolute",top:2,left:z.corrugation?13:2}}/>
+                      </div>
+                      <span style={{fontSize:11,color:z.corrugation?cl.amber:cl.dim}}>Corrugation risk</span>
+                    </div>
+                    {z.corrugation && (
+                      <div>
+                        <Lbl>Grinding interval (MGT)</Lbl>
+                        <Inp value={z.corrMGT} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{corrMGT:Math.max(1,v)}):x;});});}} min={1} max={50} step={0.5}/>
+                        <div style={{fontSize:10,color:cl.amber,marginTop:3}}>Legacy MGT fallback. Preventive and corrective grinding can also trigger when simulated corrugation amplitude reaches its threshold.</div>
+                        <div style={{display:"grid",gridTemplateColumns:"minmax(220px,1fr) minmax(220px,1fr)",gap:10,marginTop:10}}>
+                          <div>
+                            <Lbl>Wavelength band</Lbl>
+                            <Sel value={z.corrBand||getDefaultCorrugationBand(z.type)} onChange={function(v){var cfg=CORRUGATION_BANDS[v]||CORRUGATION_BANDS["30-100"];setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{corrBand:v,corrTrigger:cfg.trigger,corrResetFrac:cfg.resetFrac}):x;});});}} opts={Object.keys(CORRUGATION_BANDS).map(function(k){return {v:k,l:CORRUGATION_BANDS[k].label};})}/>
+                            <div style={{fontSize:10,color:"#4a6a74",marginTop:4}}>Recommended for this zone type: <b style={{color:cl.text}}>{corrGuide.recommendedBand} mm</b></div>
+                          </div>
+                          <div>
+                            <Lbl>Current p-p amplitude (mm)</Lbl>
+                            <Inp value={z.corrAmp!=null?z.corrAmp:0} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{corrAmp:Math.max(0,v)}):x;});});}} min={0} max={1} step={0.005}/>
+                            <div style={{fontSize:10,color:"#4a6a74",marginTop:4,lineHeight:1.5}}>{corrGuide.currentHint}</div>
+                          </div>
+                          <div>
+                            <Lbl>Grinding trigger amplitude (mm)</Lbl>
+                            <Inp value={z.corrTrigger!=null?z.corrTrigger:(CORRUGATION_BANDS[z.corrBand||getDefaultCorrugationBand(z.type)]||CORRUGATION_BANDS["30-100"]).trigger} onChange={function(v){setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{corrTrigger:Math.max(0.005,v)}):x;});});}} min={0.005} max={1} step={0.005}/>
+                            <div style={{fontSize:10,color:"#4a6a74",marginTop:4}}>If you do not have a local specification, keep the band default: <b style={{color:cl.text}}>{corrGuide.recommendedTrigger.toFixed(3)} mm p-p</b></div>
+                          </div>
+                          <div style={{display:"flex",alignItems:"flex-end"}}>
+                            <button
+                              onClick={function(){
+                                var defBand=getDefaultCorrugationBand(z.type);
+                                var cfg=CORRUGATION_BANDS[defBand]||CORRUGATION_BANDS["30-100"];
+                                setSpZ(function(a){return a.map(function(x){return x.id===z.id?Object.assign({},x,{corrBand:defBand,corrTrigger:cfg.trigger,corrResetFrac:cfg.resetFrac}):x;});});
+                              }}
+                              style={{background:"rgba(125,211,200,0.08)",border:"1px solid rgba(125,211,200,0.22)",borderRadius:6,color:cl.teal,padding:"8px 10px",fontSize:11,cursor:"pointer",width:"100%"}}
+                            >
+                              Apply recommended band + trigger
+                            </button>
+                          </div>
+                        </div>
+                        <div style={{fontSize:10,color:"#4a6a74",marginTop:4}}>
+                          Band default {((CORRUGATION_BANDS[z.corrBand||getDefaultCorrugationBand(z.type)]||CORRUGATION_BANDS["30-100"]).trigger).toFixed(3)} mm p-p. Grinding resets corrugation to {(100*((z.corrResetFrac!=null?z.corrResetFrac:(CORRUGATION_BANDS[z.corrBand||getDefaultCorrugationBand(z.type)]||CORRUGATION_BANDS["30-100"]).resetFrac))).toFixed(0)}% of trigger.
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <Btn onClick={function(){
+            var newId = "sz_"+Date.now();
+            var defType = "braking";
+            var defBand = getDefaultCorrugationBand(defType);
+            setSpZ(function(a){return a.concat([{id:newId,name:"Station zone "+(a.length+1),type:defType,lengthM:100,radius:9000,speed:getSpecialZoneDefaultSpeed(defType, speed),grade:"R260",fVExtra:SPECIAL_ZONE_TYPES[defType].fVExtra,corrugation:false,corrMGT:SPECIAL_ZONE_TYPES[defType].corrMGT,corrBand:defBand,corrAmp:0,corrTrigger:CORRUGATION_BANDS[defBand].trigger,corrResetFrac:CORRUGATION_BANDS[defBand].resetFrac}]);});
+          }} sm={true}>+ Add special zone</Btn>
+          {specialZones.length>0&&<div style={{fontSize:10,color:"#4a6a74",marginTop:8}}>Special zones appear as additional segments in the simulation results, clearly labelled with their zone type badge.</div>}
+        </Card>
+
+        <div style={{gridColumn:2,gridRow:1}}>
           {err&&<div style={{background:"rgba(248,113,113,0.1)",border:"1px solid rgba(248,113,113,0.3)",borderRadius:10,padding:"12px 16px",marginBottom:16,color:cl.warn,fontSize:13}}>Error: {err}</div>}
           {!hasRun&&(
             <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:400,color:"#4a6a74",textAlign:"center",gap:16,border:"1px dashed rgba(125,211,200,0.15)",borderRadius:16}}>
@@ -5342,7 +5427,10 @@ export default function App() {
                     <Kpi label="Grindings"   value={asr.gCount} unit="passes"/>{reprActive&&<Kpi label="Reprofiling" value={asr.reprCount||0} unit="operations" warn={true}/>}{asr.data&&asr.data.length>0&&<Kpi label="V reserve left" value={(asr.data[asr.data.length-1].res||0).toFixed(1)} unit="mm"/>}{reprActive&&asr.data&&asr.data.length>0&&<Kpi label="L reserve left" value={(asr.data[asr.data.length-1].resL||0).toFixed(1)} unit="mm"/>}
                   </div>
                   <div style={{display:"flex",gap:6,marginBottom:12}}>
-                    {[["wear","Wear V and L"],["rcf","RCF Index"],["reserve","Metal Reserve"],["plan","Schedule"],["cost","Replacement Cost"],["grind","Grinding Cost"],["repr","Reprofiling Cost"],["tamp","Ballast Tamping"],["tcost","Tamping Cost"],["cmp","Strategy Comparison"]].map(function(item){return <Btn key={item[0]} onClick={function(){setCt(item[0]);}} active={ctab===item[0]} sm={true}>{item[1]}</Btn>;})}
+                    {[["wear","Wear V and L"],["rcf","RCF Index"]]
+                      .concat(asr&&asr.seg&&asr.seg.corrugation?[["corr","Corrugation"]]:[])
+                      .concat([["reserve","Metal Reserve"],["plan","Schedule"],["cost","Replacement Cost"],["grind","Grinding Cost"],["repr","Reprofiling Cost"],["tamp","Ballast Tamping"],["tcost","Tamping Cost"],["cmp","Strategy Comparison"]])
+                      .map(function(item){return <Btn key={item[0]} onClick={function(){setCt(item[0]);}} active={ctab===item[0]} sm={true}>{item[1]}</Btn>;})}
                   </div>
                   <div style={{background:"rgba(0,0,0,0.2)",borderRadius:12,padding:18,border:"1px solid rgba(125,211,200,0.1)",marginBottom:14}}>
                     {ctab==="wear"&&(
@@ -5381,6 +5469,26 @@ export default function App() {
                             <Area type="monotone" dataKey="rcf" name="RCF Index" stroke={cl.warn} fill="url(#gR)" strokeWidth={2} dot={false}/>
                           </AreaChart>
                         </ResponsiveContainer>
+                      </div>
+                    )}
+                    {ctab==="corr"&&asr&&asr.seg&&asr.seg.corrugation&&(
+                      <div>
+                        <div style={{fontSize:12,color:cl.dim,marginBottom:12}}>
+                          Corrugation peak-to-peak amplitude on this special zone
+                          {asr.corrugationBand&&<span style={{marginLeft:12,color:cl.amber}}>Band: <b>{asr.corrugationBand} mm</b></span>}
+                        </div>
+                        <ResponsiveContainer width="100%" height={250}>
+                          <LineChart data={asr.data}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)"/>
+                            <XAxis dataKey="year" stroke="#4a6a74" tick={{fontSize:11}}/>
+                            <YAxis stroke="#4a6a74" tick={{fontSize:11}} unit=" mm"/>
+                            <Tooltip content={<Tip/>}/><Legend wrapperStyle={{fontSize:12}}/>
+                            {asr.data&&asr.data.length>0&&asr.data[0].corrTrigger!=null&&<ReferenceLine y={asr.data[0].corrTrigger} stroke={cl.amber} strokeDasharray="5 3" label={{value:"Trigger "+asr.data[0].corrTrigger.toFixed(3)+" mm",fill:cl.amber,fontSize:10}}/>}
+                            <Line type="monotone" dataKey="corrAmp" name="Corrugation p-p (mm)" stroke={cl.amber} strokeWidth={2} dot={false}/>
+                            <Line type="monotone" dataKey="ground" name="Grinding event" stroke={cl.green} strokeWidth={1} dot={false} hide={true}/>
+                          </LineChart>
+                        </ResponsiveContainer>
+                        <div style={{fontSize:10,color:"#4a6a74",marginTop:6}}>Grinding events remain in the normal schedule, cost and summary tables. This view only shows the local corrugation state and its reduction after grinding.</div>
                       </div>
                     )}
                     {ctab==="reserve"&&(
@@ -5439,7 +5547,7 @@ export default function App() {
                     {ctab==="tcost"&&trackMode==="ballast"&&viewResult&&<TampingCostPanel segs={viewResult.results.map(function(r){return r.seg;})} result={viewResult} horizon={horizon} context={context} platform={tPlatform} appoint={tAppoint} degCycles={tDegCycles} globalSpeed={speed} currencyMap={currencyMap} currency={sharedCurrency} initMachine={tcMachineKey} initMode={tcMode} initRegion={tcRegion} initNight={tcNight} initBallastPxOv={tcBallastPxOv} initCOpPerMl={tcCOpPerMl} initCMobilFix={tcCMobilFix} initCDegarnMl={tcCDegarnMl} initOwnManual={tcOwnManual} initOwnFuelLph={tcOwnFuelLph} initOwnGasoil={tcOwnGasoil} initOwnMaintH={tcOwnMaintH} initOwnLabourH={tcOwnLabourH} initOwnProdMlH={tcOwnProdMlH} onParamsChange={function(p){ if(p.machineKey!==undefined) setTCMachine(p.machineKey); if(p.mode!==undefined) setTCMode(p.mode); if(p.region!==undefined) setTCRegion(p.region); if(p.nightHrs!==undefined) setTCNight(p.nightHrs); if(p.ballastPxOv!==undefined) setTCBallPx(p.ballastPxOv); if(p.cOpPerMl!==undefined) setTCCOp(p.cOpPerMl); if(p.cMobilFix!==undefined) setTCCMF(p.cMobilFix); if(p.cDegarnMl!==undefined) setTCCDeg(p.cDegarnMl); if(p.ownManual!==undefined) setTCOwnManual(p.ownManual); if(p.ownFuelLph!==undefined) setTCOwnFuel(p.ownFuelLph); if(p.ownGasoil!==undefined) setTCOwnGasoil(p.ownGasoil); if(p.ownMaintH!==undefined) setTCOwnMaint(p.ownMaintH); if(p.ownLabourH!==undefined) setTCOwnLab(p.ownLabourH); if(p.ownProdMlH!==undefined) setTCOwnProd(p.ownProdMlH); }}/>}
                     {ctab==="tcost"&&trackMode==="ballast"&&!viewResult&&<div style={{padding:40,textAlign:"center",color:"#6b9ea8",fontSize:13}}>Run the simulation first to see tamping costs.</div>}
                     {ctab==="tcost"&&trackMode!=="ballast"&&<div style={{padding:40,textAlign:"center",color:"#fbbf24",fontSize:13}}>Tamping Cost is only available for ballast track.</div>}
-                    {ctab==="cmp"&&<ComparePanel simResult={viewResult} horizon={horizon} context={context} params={{context:context,trains:trains,segments:segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){var b=Object.assign({},s,{radius:s.repr,railGrade:s.grade});if(isBF&&initCond[s.id]){var ic=initCond[s.id];b.initWearV=ic.wearV||0;b.initWearL=ic.wearL||0;b.initRCF=ic.rcf||0;b.initMGT=ic.mgt||0;}return b;}).concat(specialZones.filter(function(z){return z.lengthM>0;}).map(function(z){return {id:z.id,label:z.name,radius:z.radius||9000,railGrade:z.grade||"R260",lengthKm:z.lengthM/1000,speed:z.speed||speed,fVExtra:z.fVExtra,corrugationMGT:z.corrugation?z.corrMGT:null,isSpecialZone:true,zoneType:z.type};})),strategy:strategy,railType:railType,railProfile:railProfile,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon,customLimV:customLimActive?customLimV:null,customLimL:customLimActive?customLimL:null,customResActive:customResActive,customMinRes:customMinRes}} grindEurPerMl={liveGrindRate} replEurPerMl={liveReplRate} grindCostParams={liveGrindCost} calcReplRate={calcReplRateForGrade} currency={sharedCurrency} currencyMap={currencyMap} reprActive={reprActive} reprThresh={reprThresh} reprRemL={reprRemL} reprRemV={reprRemV} reprRcfR={reprRcfR} reprSkip={reprSkip} reprRadiusBased={reprRadiusBased} reprRemLByBand={reprRemLByBand} liveReprRate={liveReprRate} liveReprMobil={liveReprMobil} ignoreSameYearGrinding={ignoreReplYearGrinding} ignoreSameYearReprofiling={ignoreReplYearReprofiling}/>}
+                    {ctab==="cmp"&&<ComparePanel simResult={viewResult} horizon={horizon} context={context} params={{context:context,trains:trains,segments:segs.filter(function(s){return s.active&&s.lengthKm>0;}).map(function(s){var b=Object.assign({},s,{radius:s.repr,railGrade:s.grade});if(isBF&&initCond[s.id]){var ic=initCond[s.id];b.initWearV=ic.wearV||0;b.initWearL=ic.wearL||0;b.initRCF=ic.rcf||0;b.initMGT=ic.mgt||0;}return b;}).concat(specialZones.filter(function(z){return z.lengthM>0;}).map(function(z){return {id:z.id,label:z.name,radius:z.radius||9000,railGrade:z.grade||"R260",lengthKm:z.lengthM/1000,speed:z.speed||speed,fVExtra:z.fVExtra,corrugation:!!z.corrugation,corrugationMGT:z.corrugation?z.corrMGT:null,corrugationBand:z.corrBand||getDefaultCorrugationBand(z.type),initCorrAmp:z.corrAmp||0,corrugationTriggerAmp:z.corrTrigger,corrugationResetFrac:z.corrResetFrac,isSpecialZone:true,zoneType:z.type};})),strategy:strategy,railType:railType,railProfile:railProfile,trackMode:trackMode,speed:speed,lubrication:lubr,horizonYears:horizon,customLimV:customLimActive?customLimV:null,customLimL:customLimActive?customLimL:null,customResActive:customResActive,customMinRes:customMinRes}} grindEurPerMl={liveGrindRate} replEurPerMl={liveReplRate} grindCostParams={liveGrindCost} calcReplRate={calcReplRateForGrade} currency={sharedCurrency} currencyMap={currencyMap} reprActive={reprActive} reprThresh={reprThresh} reprRemL={reprRemL} reprRemV={reprRemV} reprRcfR={reprRcfR} reprSkip={reprSkip} reprRadiusBased={reprRadiusBased} reprRemLByBand={reprRemLByBand} liveReprRate={liveReprRate} liveReprMobil={liveReprMobil} ignoreSameYearGrinding={ignoreReplYearGrinding} ignoreSameYearReprofiling={ignoreReplYearReprofiling}/>}
                   </div>
                   <div style={{background:"rgba(0,0,0,0.15)",borderRadius:10,border:"1px solid rgba(125,211,200,0.08)",overflow:"hidden"}}>
                     <div style={{padding:"12px 16px",borderBottom:"1px solid rgba(255,255,255,0.06)",fontSize:11,letterSpacing:2,color:cl.teal,textTransform:"uppercase",fontWeight:700}}>Summary - All Segments</div>
