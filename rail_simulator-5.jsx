@@ -2144,6 +2144,82 @@ var HELP=[
   },
 ];
 
+var TECH_GUIDE_MANUAL = [
+  {
+    id:"tg_intro",
+    title:"Introduction and Scope",
+    body:"The Rail Simulator Technical Guide explains how the simulator works, what each module represents physically, how each parameter influences the results, and how the current implementation relates to standards, literature and engineering return-of-experience (REX).\n\nThe simulator is intended for engineering studies, maintenance strategy comparison, lifecycle planning and budget preparation for tramway, metro/LRT and heavy rail infrastructure. It is not intended to replace local maintenance standards, safety acceptance, formal certification or detailed vehicle-track dynamic studies.",
+    details:[
+      {heading:"What the simulator covers",text:"The model covers vertical wear, lateral wear, rolling contact fatigue (RCF), preventive grinding, corrective grinding, reprofiling, metal reserve consumption, replacement logic, grinding stone consumption, cost models, validation against measured rates, ballast tamping for ballasted track, and simplified corrugation behaviour on selected special zones."},
+      {heading:"What the simulator does not attempt to solve explicitly",text:"The simulator does not solve a full wheel-rail contact mechanics problem, does not track the full wavelength spectrum of corrugation, does not model inner/outer rail asymmetry explicitly, and does not simulate wheel profile evolution or short-term transient sequencing within a year."}
+    ]
+  },
+  {
+    id:"tg_use",
+    title:"How to Read and Use the Tool",
+    body:"The recommended order of use is: define traffic, define the track layout by radius band, add special zones if relevant, choose rail parameters, choose a maintenance strategy, review limits and reserve thresholds, configure reprofiling, run the simulation, and finally interpret the charts, schedule, costs, comparison and validation panels.",
+    details:[
+      {heading:"Parameter-first philosophy",text:"The left side of the interface contains the project definition. The right side contains the simulation results and cost tabs. The tool is designed so that the user first defines the infrastructure and traffic assumptions, then the material and maintenance assumptions, and only then interprets the resulting degradation and cost curves."},
+      {heading:"Recommended interpretation order",text:"For each project, first review the wear and RCF charts segment by segment, then the metal reserve chart, then the schedule, then the grinding/reprofiling/replacement cost tabs, and finally the strategy comparison and validation panels."}
+    ]
+  },
+  {
+    id:"tg_workflow",
+    title:"Simulation Workflow",
+    body:"The simulator runs one annual degradation-maintenance loop per active segment. Standard radius-band segments and special zones are both converted into simulation segments and treated through the same core engine, with additional fields for local effects such as special-zone vertical wear severity or corrugation state.",
+    details:[
+      {heading:"Typical yearly loop",text:"For each year, the model updates accumulated MGT, applies vertical and lateral wear increments, updates RCF, updates corrugation amplitude when relevant, evaluates reprofiling, evaluates grinding, checks replacement, and stores a yearly record for charts and cost summaries."},
+      {heading:"Raw engine vs display post-processing",text:"Some display options intentionally do not modify the core engine. For example, ignoring same-year grinding or reprofiling on replacement year is treated as a display and reporting override, not as a physical rewrite of the simulated sequence."}
+    ]
+  },
+  {
+    id:"tg_arch",
+    title:"Model Architecture",
+    body:"The model is annual and segment-based. Each segment carries state variables such as wearV, wearL, RCF, vertical reserve, lateral reserve, and for eligible special zones, a simplified corrugation amplitude. These states are updated consistently throughout the horizon.",
+    details:[
+      {heading:"Main state variables",text:"Vertical wear represents crown loss. Lateral wear represents gauge-face loss. RCF is a normalized damage index. Vertical and lateral reserves represent removable metal still available before maintenance becomes infeasible. Corrugation amplitude, where active, is stored as a peak-to-peak roughness proxy for selected wavelength bands."},
+      {heading:"Why annual time step",text:"The annual time step keeps the model legible and robust for lifecycle planning and budgeting, at the cost of smoothing short-term sequencing. This is acceptable for strategy comparison and cost planning, but it must be remembered when interpreting maintenance events that in practice may happen a few months earlier or later within a year."}
+    ]
+  },
+  {
+    id:"tg_traffic",
+    title:"Traffic and Damage Logic",
+    body:"Traffic drives every deterioration mechanism in the simulator. Gross MGT describes line busyness. Equivalent MGT introduces axle-load sensitivity so that a heavier fleet contributes disproportionately more wear and fatigue damage than a lighter fleet at identical gross tonnage.",
+    details:[
+      {heading:"Why equivalent tonnage exists",text:"The same gross tonnage can produce very different damage if axle loads differ. The simulator therefore uses equivalent tonnage logic for rail degradation, while tamping retains a gross-tonnage-oriented logic because ballast settlement follows a different sensitivity law."},
+      {heading:"Multi-fleet accumulation",text:"The simulator sums the contribution of all fleets defined in the train panel. Manual passes/day, weekly profiles and mileage-derived profiles are simply different ways to derive the same traffic input into the damage model."}
+    ]
+  },
+  {
+    id:"tg_params",
+    title:"Rail System Parameters and Their Role",
+    body:"Rail Type, Rail Profile, Rail Grade, Track Form, operating speed and lubrication all affect either the wear multipliers, the fatigue tendency, the limits and reserves, or all of them together. Their role is not interchangeable: geometry controls contact regime, material controls damage resistance, maintenance controls recovery, and limits control end-of-life.",
+    details:[
+      {heading:"Rail type and profile",text:"Rail type distinguishes vignole and grooved rail families. Rail profile defines the default dimensional section, wear limits and metal reserves. The simulator now uses the selected rail profile globally unless manual overrides are activated."},
+      {heading:"Rail grade",text:"Rail grade modifies wear and fatigue resistance. Harder steels reduce wear and RCF in large-radius track, but their benefit is progressively damped in tight curves where sliding and geometry dominate the contact regime."},
+      {heading:"Track form, speed and lubrication",text:"Track form alters the effective severity of the wheel-rail environment. Speed modifies dynamic contact severity. Lubrication strongly affects lateral wear and more moderately affects RCF growth through a dedicated factor. These factors are treated separately so their influence remains explicit and calibratable."}
+    ]
+  },
+  {
+    id:"tg_special",
+    title:"Special Zones and Corrugation",
+    body:"Special zones are localised additions to the line model used to represent braking zones, acceleration zones, terminus areas and transitions. They are simulated as independent segments with their own length, radius, speed, rail grade and local severity factor. Corrugation can also be activated on these zones through a simplified peak-to-peak amplitude state.",
+    details:[
+      {heading:"Why special zones exist",text:"A standard radius-band model is often insufficient for stations, braking areas and transitions where local wear and roughness growth depart strongly from the line-average behaviour. The special-zone module allows these effects to be represented without splitting the entire line into many micro-segments."},
+      {heading:"Corrugation implementation",text:"When corrugation risk is active, the simulator tracks a wavelength band, a current peak-to-peak amplitude, a trigger amplitude, an annual growth rate and a reset fraction after grinding. Corrugation-driven grindings flow through the normal grinding pipeline, which means they appear in the schedule, cost tabs, strategy comparison and summaries."}
+    ]
+  },
+  {
+    id:"tg_outputs",
+    title:"How to Interpret the Outputs",
+    body:"The output tabs are complementary. Wear and RCF charts explain why maintenance is needed. The reserve chart explains whether maintenance remains feasible. The schedule shows when grinding, reprofiling and replacement are triggered. Cost tabs quantify the consequence of those events. Strategy comparison and summary tables aggregate the result into decision-friendly figures.",
+    details:[
+      {heading:"Use the charts before the costs",text:"A cost result is only meaningful if the triggering physical behaviour is coherent. The recommended practice is to inspect wear, RCF, reserve and schedule first, and only then read grinding cost, reprofiling cost, replacement cost and strategy comparison."},
+      {heading:"Validation and calibration",text:"The validation panel compares simulator outputs with measured wear rates and reports recommended base wear values derived from the case factors. These values are advisory only and are meant to support manual engineering calibration, not automatic self-calibration."}
+    ]
+  }
+];
+
 
 
 // ---- BALLAST TAMPING PANEL ----
@@ -4114,13 +4190,13 @@ export default function App() {
     var pName = projectName || "Unnamed Project";
     
     // ---- COLORS ----
-    var TEAL   = [125,211,200];
+    var TEAL   = [54,130,122];
     var AMBER  = [251,191,36];
     var WARN   = [248,113,113];
     var GREEN  = [74,222,128];
     var DARK   = [13,26,34];
-    var LIGHT  = [200,221,217];
-    var MUTED  = [136,153,170];
+    var LIGHT  = [58,70,80];
+    var MUTED  = [96,108,120];
     var WHITE  = [255,255,255];
     
     // ---- HELPERS ----
@@ -4143,7 +4219,7 @@ export default function App() {
       doc.setFillColor.apply(doc, TEAL);
       doc.rect(ml, y, cw, 7, "F");
       doc.setFontSize(10); doc.setFont("helvetica","bold");
-      doc.setTextColor.apply(doc, DARK);
+      doc.setTextColor.apply(doc, WHITE);
       doc.text(txt, ml+3, y+5);
       y += 10;
       doc.setFont("helvetica","normal");
@@ -4283,8 +4359,8 @@ export default function App() {
     // ==============================
     // PAGE 1 - COVER
     // ==============================
-    doc.setFillColor.apply(doc, DARK);
-    doc.rect(0, 0, W, H, "F");
+      doc.setFillColor.apply(doc, DARK);
+      doc.rect(0, 0, W, H, "F");
     // Accent bar
     doc.setFillColor.apply(doc, TEAL);
     doc.rect(0, 0, 6, H, "F");
@@ -4294,8 +4370,8 @@ export default function App() {
     doc.text("Rail Wear &", ml+10, 60);
     doc.text("Maintenance Report", ml+10, 74);
     doc.setFontSize(13); doc.setFont("helvetica","normal");
-    doc.setTextColor.apply(doc, TEAL);
-    doc.text("Simulation Results and Lifecycle Cost Analysis", ml+10, 85);
+      doc.setTextColor(170,240,232);
+      doc.text("Simulation Results and Lifecycle Cost Analysis", ml+10, 85);
     
     // Project info box
     doc.setFillColor(18,35,44);
@@ -4724,6 +4800,226 @@ export default function App() {
     }
   }
 
+  function generateTechnicalGuidePDF() {
+    try{
+      setErr(null);
+      var doc = new jsPDF({orientation:"portrait",unit:"mm",format:"a4"});
+      var W=210, H=297;
+      var ml=15, mr=15, mt=15;
+      var cw=W-ml-mr;
+      var y=mt;
+      var today = new Date().toLocaleDateString("en-GB");
+      var guideName = (projectName||"Rail_Simulator")+"_"+"technical_guide_"+today.replace(/\//g,"-")+".pdf";
+      var TEAL=[54,130,122], AMBER=[251,191,36], WARN=[248,113,113], GREEN=[74,222,128], DARK=[13,26,34], LIGHT=[58,70,80], MUTED=[96,108,120], WHITE=[255,255,255];
+
+      function newPage(){
+        doc.addPage();
+        y=mt;
+        doc.setFillColor.apply(doc,DARK);
+        doc.rect(0,0,W,8,"F");
+        doc.setFontSize(7); doc.setTextColor.apply(doc,MUTED);
+        doc.text("Rail Simulator Technical Guide", ml, 5.5);
+        doc.text("Mohamed BOUDIA", W-mr, 5.5, {align:"right"});
+        y=14;
+      }
+      function checkY(needed){ if(y+needed>H-15) newPage(); }
+      function sectionTitle(txt){
+        checkY(12);
+        doc.setFillColor.apply(doc,TEAL);
+        doc.rect(ml,y,cw,7,"F");
+        doc.setFontSize(10); doc.setFont("helvetica","bold");
+        doc.setTextColor.apply(doc,WHITE);
+        doc.text(txt, ml+3, y+5);
+        doc.setFont("helvetica","normal");
+        y+=10;
+      }
+      function subTitle(txt){
+        checkY(8);
+        doc.setFontSize(9); doc.setFont("helvetica","bold");
+        doc.setTextColor.apply(doc,TEAL);
+        doc.text(txt, ml, y+4);
+        doc.setFont("helvetica","normal");
+        y+=7;
+      }
+      function bodyText(txt, indent){
+        var x=ml+(indent||0);
+        var width=cw-(indent||0);
+        var lines=doc.splitTextToSize(txt,width);
+        checkY(lines.length*4+2);
+        doc.setFontSize(8); doc.setTextColor.apply(doc,LIGHT);
+        doc.text(lines,x,y);
+        y+=lines.length*4+2;
+      }
+      function bulletText(items, indent){
+        items.forEach(function(it){ bodyText("- "+it, indent||3); });
+      }
+      function tableHeader(cols){
+        checkY(8);
+        doc.setFillColor(25,45,55);
+        doc.rect(ml,y,cw,6,"F");
+        doc.setFontSize(7); doc.setFont("helvetica","bold");
+        doc.setTextColor.apply(doc,TEAL);
+        var x=ml;
+        cols.forEach(function(col){
+          var align=col.align||"left";
+          var tx=align==="right"?x+col.w-1:x+1;
+          doc.text(col.label,tx,y+4,{align:align==="right"?"right":"left"});
+          x+=col.w;
+        });
+        doc.setFont("helvetica","normal");
+        y+=6;
+      }
+      function tableRow(cols, vals, shade){
+        checkY(6);
+        if(shade){ doc.setFillColor(18,35,44); doc.rect(ml,y,cw,5.5,"F"); }
+        doc.setFontSize(7);
+        var x=ml;
+        cols.forEach(function(col,i){
+          var align=col.align||"left";
+          var tx=align==="right"?x+col.w-1:x+1;
+          var val = vals[i]===undefined||vals[i]===null ? "-" : String(vals[i]);
+          doc.setTextColor.apply(doc,LIGHT);
+          doc.text(val,tx,y+4,{align:align==="right"?"right":"left"});
+          x+=col.w;
+        });
+        y+=5.5;
+      }
+      function tableDivider(){
+        doc.setDrawColor(30,55,65);
+        doc.line(ml,y,ml+cw,y);
+        y+=0.5;
+      }
+      function linkList(links){
+        if(!links||!links.length) return;
+        subTitle("Selected References");
+        links.forEach(function(link){
+          bodyText("- "+link.label, 3);
+          bodyText(link.url, 8);
+        });
+      }
+      function renderSection(sec, idx){
+        sectionTitle((idx+1)+". "+sec.title);
+        if(sec.body) bodyText(sec.body);
+        if(sec.bullets) bulletText(sec.bullets,3);
+        (sec.details||[]).forEach(function(d){
+          if(d.heading) subTitle(d.heading);
+          if(d.text) bodyText(d.text,2);
+          if(d.table&&d.table.length){
+            var rows=d.table;
+            var nCols=rows[0].length;
+            var widths = nCols===2 ? [55,cw-55] :
+                         nCols===3 ? [36,44,cw-80] :
+                         nCols===4 ? [30,30,30,cw-90] :
+                         nCols===5 ? [28,26,26,26,cw-106] :
+                         nCols===6 ? [24,22,22,22,22,cw-112] :
+                                     rows[0].map(function(){return cw/nCols;});
+            var cols=rows[0].map(function(h,i){return {label:h,w:widths[i],align:i===0?"left":"left"};});
+            tableHeader(cols);
+            rows.slice(1).forEach(function(r,i){ tableRow(cols,r,i%2===0); });
+            tableDivider();
+            y+=3;
+          }
+        });
+        linkList(sec.links);
+        y+=4;
+      }
+
+      var activeProfile = activeRailProfile.profile||{};
+      var guideSections = [
+        {
+          title:"Guide Structure",
+          body:"This technical guide explains the rail lifecycle simulator from three complementary angles: engineering use, model architecture and calibration logic. It combines custom guide chapters with the detailed method sections already maintained inside the application help system.",
+          bullets:[
+            "Part A explains how to use the simulator and read the results.",
+            "Part B explains how the physical and economic models are implemented.",
+            "Part C maps the implementation to literature, standards and known limitations."
+          ]
+        }
+      ].concat(TECH_GUIDE_MANUAL).concat(
+        HELP.filter(function(sec){
+          return ["overview","mgt","radius","wear","rcf","grinding","reprofiling","replacement","cost_repl","cost_grind","stones","validation","limits","tamping"].indexOf(sec.id)>=0;
+        })
+      );
+
+      // Cover
+      doc.setFillColor.apply(doc,DARK);
+      doc.rect(0,0,W,H,"F");
+      doc.setFillColor.apply(doc,TEAL);
+      doc.rect(0,0,7,H,"F");
+      doc.setFont("helvetica","bold");
+      doc.setFontSize(24); doc.setTextColor.apply(doc,WHITE);
+      doc.text("Rail Simulator", ml+12, 48);
+      doc.text("Technical Guide", ml+12, 61);
+      doc.setFont("helvetica","normal");
+      doc.setFontSize(12); doc.setTextColor(170,240,232);
+      doc.text("Methods, formulas, parameters, literature and user guidance", ml+12, 73);
+      doc.setFillColor(18,35,44);
+      doc.roundedRect(ml+8, 92, cw-8, 56, 2, 2, "F");
+      doc.setFontSize(9); doc.setFont("helvetica","bold"); doc.setTextColor(170,240,232);
+      doc.text("CURRENT PROJECT CONTEXT", ml+14, 104);
+      doc.setFont("helvetica","normal"); doc.setFontSize(8); doc.setTextColor.apply(doc,LIGHT);
+      doc.text("Project: "+(projectName||"Unnamed Project"), ml+14, 114);
+      doc.text("Context: "+(CONTEXTS[context]||{}).label, ml+14, 120);
+      doc.text("Rail type / profile: "+(RAIL_TYPES[railType]||{}).label+" / "+((activeProfile.label)||activeRailProfile.key||"-"), ml+14, 126);
+      doc.text("Track form: "+(TRACK_MODES[trackMode]||{}).label, ml+14, 132);
+      doc.text("Strategy: "+strategy+" | Speed: "+speed+" km/h | Lubrication: "+(LUBRICATION[lubr]||{}).label, ml+14, 138);
+      doc.text("Generated: "+today, ml+14, 144);
+      doc.setFontSize(7); doc.setTextColor.apply(doc,MUTED);
+      doc.text("This document complements the simulation report. It is intended as a long-form user and methods guide.", ml+12, H-18);
+      doc.text("Created by Mohamed BOUDIA", W-mr, H-8, {align:"right"});
+
+      // TOC / structure page
+      newPage();
+      sectionTitle("Table of Contents");
+      guideSections.forEach(function(sec, idx){
+        bodyText((idx+1)+". "+sec.title, 2);
+      });
+      y+=4;
+      subTitle("Reading recommendation");
+      bodyText("Start with the introduction, workflow and architecture chapters. Then read the wear, RCF, grinding and reprofiling sections. Use the validation and known limitations chapters before drawing budget conclusions from the outputs.", 2);
+
+      // chapters
+      guideSections.forEach(function(sec, idx){ renderSection(sec, idx); });
+
+      // appendix with live project defaults
+      newPage();
+      sectionTitle((guideSections.length+1)+". Current Project Snapshot");
+      bodyText("This appendix records the live project configuration at the time the guide was exported. It helps the reader understand how the current model is being used in the simulator instance, without confusing this configuration snapshot with the generic technical explanations in the rest of the guide.");
+      var snapshotRows = [
+        ["Context",(CONTEXTS[context]||{}).label],
+        ["Gross MGT / yr",mgtPrev],
+        ["Equivalent MGT / yr",eqPrev],
+        ["Rail type",(RAIL_TYPES[railType]||{}).label],
+        ["Rail profile",(activeProfile.label)||activeRailProfile.key||"-"],
+        ["Track form",(TRACK_MODES[trackMode]||{}).label],
+        ["Lubrication",(LUBRICATION[lubr]||{}).label],
+        ["Strategy",strategy],
+        ["Simulation horizon",horizon+" years"],
+        ["Reprofiling active",reprActive?"Yes":"No"],
+        ["Radius-based reprofiling",reprRadiusBased?"Yes":"No"],
+        ["Custom limits active",customLimActive?"Yes":"No"],
+        ["Custom reserves active",customResActive?"Yes":"No"]
+      ];
+      var snapCols=[{label:"Parameter",w:60},{label:"Value",w:cw-60}];
+      tableHeader(snapCols);
+      snapshotRows.forEach(function(r,i){ tableRow(snapCols,r,i%2===0); });
+      tableDivider(); y+=4;
+
+      // page numbering
+      var totalPages = doc.getNumberOfPages();
+      for(var pg=2; pg<=totalPages; pg++){
+        doc.setPage(pg);
+        doc.setFontSize(7); doc.setTextColor.apply(doc,MUTED);
+        doc.text("Page "+pg+"/"+totalPages, W-mr, H-8, {align:"right"});
+        doc.text(today, ml, H-8);
+      }
+      doc.save(guideName);
+    }catch(e){
+      console.error("Technical guide PDF generation failed", e);
+      setErr("Could not generate the technical guide PDF. Check the browser console for details.");
+    }
+  }
+
   if(!authed) {
     return (
       <div style={{background:"#0d1f26",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"-apple-system,BlinkMacSystemFont,sans-serif"}}>
@@ -4769,6 +5065,7 @@ export default function App() {
         <div style={{display:"flex",gap:10,alignItems:"center"}}>
           <span style={{fontSize:12,color:cl.dim}}>Gross MGT: <b style={{color:cl.teal}}>{mgtPrev}</b>/yr | Equiv. MGT: <b style={{color:cl.teal}}>{eqPrev}</b>/yr</span>
           <Btn onClick={function(){setHelp(true);}} sm={true}>Help and Methods</Btn>
+          <Btn onClick={generateTechnicalGuidePDF} sm={true}>Technical Guide (PDF)</Btn>
           <Btn onClick={function(){setShowRpt(true);}} sm={true}>Export Report (PDF)</Btn>
           <Btn onClick={run} active={true}>Run Simulation</Btn>
         </div>
@@ -4880,6 +5177,9 @@ export default function App() {
                   return <div key={item} style={{fontSize:11,color:cl.teal}}>[ok] {item}</div>;
                 })}
               </div>
+            </div>
+            <div style={{background:"rgba(251,191,36,0.05)",border:"1px solid rgba(251,191,36,0.12)",borderRadius:8,padding:"10px 14px",marginBottom:20,fontSize:12,color:cl.dim,lineHeight:1.7}}>
+              A separate <b style={{color:cl.amber}}>Technical Guide (PDF)</b> is also available from the main header. It contains methods, formulas, parameter explanations, literature mapping and user guidance.
             </div>
             {!result&&<div style={{fontSize:12,color:cl.warn,marginBottom:12,padding:"6px 10px",background:"rgba(248,113,113,0.08)",borderRadius:6}}>Run the simulation first to include results in the report.</div>}
             <div style={{display:"flex",gap:10,justifyContent:"flex-end"}}>
