@@ -1862,11 +1862,11 @@ function GrindPanel(props) {
 
 var HELP=[
   {id:"overview",title:"Overview",
-   body:"Rail Wear and Maintenance Simulator v1.2 - Created by Mohamed BOUDIA.\n\nPURPOSE: Estimates rail wear progression, grinding cycles, reprofiling interventions, replacement timelines, and full lifecycle costs for tram, metro/LRT, and heavy rail.\n\nPHYSICS ENGINE: Archard wear model (1953) + Eisenmann dynamic load formula + RCF damage accumulation.\n\nCALIBRATION: Infrabel/TU Delft 2023 big-data study (5338 km, Belgium 2012-2019) and Guangzhou Metro field measurements (2021-2022, China).\n\nCONTEXTS: Tram (Q_ref=10t), Metro/LRT (Q_ref=15t), Heavy rail (Q_ref=22.5t). Each radius band simulated independently on annual time step.\n\nMAINTENANCE STRATEGIES:\n- Preventive grinding: MGT-scheduled, crown only, 0.20mm/pass\n- Corrective grinding: 3x interval, up to 4 passes, 0.55mm/pass\n- Heavy rail RCF control: grinding is triggered when the MGT cycle is reached OR when the heavy-context RCF trigger is reached (r1=0.45, r2=0.32, r3=0.30, r4=0.32, r5=0.38)\n- Reprofiling: geometry-triggered, crown + gauge face, radius-based removal\n\nSTANDARDS: EN 13674-1:2011, UIC 714R, EN 15692, prEN 17343, Network Rail NR/L2/TRK/001, IHHA 2019.",
+   body:"Rail Wear and Maintenance Simulator v1.2 - Created by Mohamed BOUDIA.\n\nPURPOSE: Estimates rail wear progression, grinding cycles, reprofiling interventions, replacement timelines, and full lifecycle costs for tram, metro/LRT, and heavy rail.\n\nPHYSICS ENGINE: Archard wear model (1953) + Eisenmann dynamic load formula + RCF damage accumulation.\n\nCALIBRATION: Infrabel/TU Delft 2023 big-data study (5338 km, Belgium 2012-2019) and Guangzhou Metro field measurements (2021-2022, China).\n\nCONTEXTS: Tram (Q_ref=10t), Metro/LRT (Q_ref=15t), Heavy rail (Q_ref=22.5t). Each radius band simulated independently on annual time step.\n\nMAINTENANCE STRATEGIES:\n- Preventive grinding: MGT-scheduled, crown only, 0.20mm/pass\n- Corrective grinding: tram/metro condition-based on vertical wear and/or RCF, heavy rail on MGT or early RCF trigger, 0.55mm/pass\n- Heavy rail RCF control: grinding is triggered when the MGT cycle is reached OR when the heavy-context RCF trigger is reached (r1=0.45, r2=0.32, r3=0.30, r4=0.32, r5=0.38)\n- Reprofiling: geometry-triggered, crown + gauge face, radius-based removal\n\nSTANDARDS AND ENGINEERING REFERENCES: EN 13674-1, EN 14811, EN 13231-3, EN 13803, UIC 714R, Network Rail NR/L2/TRK/001, IHHA guidance.",
    links:[
-     {label:"EN 13674-1:2011 - Rail profiles and wear limits",url:"https://www.en-standard.eu/bs-en-13674-1-2011-railway-applications-track-rail/",type:"standard"},
-     {label:"UIC 714R - Rail defect catalogue",url:"https://uic.org/IMG/pdf/714r.pdf",type:"standard"},
-     {label:"prEN 17343 - Rail grinding specification (CEN)",url:"https://standards.cen.eu/dyn/www/f?p=204:110:0::::FSP_PROJECT:67843",type:"standard"},
+     {label:"EN 13674-1:2011+A1:2017 - Vignole rail profiles, steel grades and product tolerances",url:"https://standards.iteh.ai/catalog/standards/cen/06f3050c-afce-4a1d-82d4-94efc51b7849/en-13674-1-2011a1-2017",type:"standard"},
+     {label:"EN 14811:2019 - Grooved rails and associated construction profiles",url:"https://standards.iteh.ai/catalog/standards/cen/925f0a86-340d-432b-b885-faecf98dd2c7/en-14811-2019",type:"standard"},
+     {label:"UIC 714R - Classification of lines for the purpose of track maintenance",url:"https://shop.uic.org/en/withdrawn-documents/14177-classification-of-lines-for-the-purpose-of-track-maintenance.html",type:"standard"},
    ]
   },
   {id:"mgt",title:"MGT - Traffic Loading",
@@ -1874,7 +1874,7 @@ var HELP=[
    links:[
      {label:"Archard J.F. (1953) - Contact and Rubbing of Flat Surfaces, J.Applied Physics 24(8)",url:"https://doi.org/10.1063/1.1721448",type:"paper"},
      {label:"IHHA Wheel-Rail Interface Guidelines, 5th ed. (2019)",url:"https://www.ihha.net/",type:"standard"},
-     {label:"EN 13674-1:2011 Annex A - Load equivalence",url:"https://www.en-standard.eu/bs-en-13674-1-2011-railway-applications-track-rail/",type:"standard"},
+      {label:"AREMA Manual for Railway Engineering, Chapter 4 - Rail",url:"https://www.arema.org/publications/",type:"standard"},
    ],
    details:[
      {heading:"Gross MGT/yr vs Equivalent MGT -- the critical difference",
@@ -1940,7 +1940,7 @@ var HELP=[
      {label:"Infrabel/Int.J.Fatigue (2025) - 212 instrumented curves analysis",url:"https://doi.org/10.1016/j.ijfatigue.2024.108342",type:"paper"},
      {label:"Ringsberg J.W. (2001) - Life prediction of RCF crack initiation, Int.J.Fatigue 23(7)",url:"https://doi.org/10.1016/S0142-1123(01)00011-5",type:"paper"},
      {label:"Squires G. et al. (2006) - Rolling Contact Fatigue, RSSB T174",url:"https://www.rssb.co.uk/research-catalogue/CatalogueItem/T174",type:"paper"},
-     {label:"UIC 712R - Rail defect catalogue (RCF classification)",url:"https://uic.org/IMG/pdf/712r.pdf",type:"standard"},
+      {label:"UIC 712R - Rail defects",url:"https://shop.uic.org/en/withdrawn-documents/9326-rail-defects-9346.html",type:"standard"},
    ],
    details:[
      {heading:"RCF Index thresholds explained",
@@ -2000,7 +2000,7 @@ var HELP=[
    body:"PURPOSE: Start simulation from existing worn rail. Essential for inherited projects, condition assessments, and remaining life evaluations.\n\nINPUT PARAMETERS (per segment):\n- Vertical wear (mm): depth from original profile height. Impact: simulation starts here; replacement sooner.\n- Lateral wear (mm): gauge face wear at 14mm below running surface (EN 13674-1 convention).\n- RCF index (0 to 1): from UT inspection or surface assessment. Above 0.3 triggers corrective grinding in year 1.\n- Accumulated MGT: total since installation. Used for lifecycle cost amortisation.\n\nHEALTH INDICATOR: health = max(wearV/limitV, wearL/limitL, RCF). Good <40%, Moderate 40-70%, Poor >70%.\n\nMETAL RESERVE: initial_reserve = nominal_reserve - (wearV x 0.8). The 0.8 factor accounts for grinding-consumed reserve not visible in wear measurement.\n\nTYPICAL USE: Input last inspection report values. Simulator shows: years remaining, urgent grinding need, updated budget.",
    links:[
      {label:"EN 13231-1:2016 - Acceptance of railway track geometry after maintenance",url:"https://standards.cen.eu/dyn/www/f?p=204:110:0::::FSP_PROJECT:38793",type:"standard"},
-     {label:"EN 13674-1:2011 - Rail wear measurement convention (clause 5.4)",url:"https://www.en-standard.eu/bs-en-13674-1-2011-railway-applications-track-rail/",type:"standard"},
+      {label:"EN 13674-1:2011+A1:2017 - Vignole rail profile geometry and terminology",url:"https://standards.iteh.ai/catalog/standards/cen/06f3050c-afce-4a1d-82d4-94efc51b7849/en-13674-1-2011a1-2017",type:"standard"},
      {label:"Network Rail NR/SP/TRK/001 - Track inspection handbook (2021)",url:"https://www.networkrail.co.uk/industry-and-commercial/",type:"standard"},
    ],
    details:[
@@ -2015,14 +2015,14 @@ var HELP=[
   {id:"replacement",title:"Replacement Criteria",
    body:"REPLACEMENT triggered when ANY ONE condition is met:\n\n1. VERTICAL WEAR >= limit:\n   Tram: 7mm | Metro: 9mm | Heavy rail: 12mm\n\n2. LATERAL WEAR >= limit:\n   Tram: 8mm | Metro: 11mm | Heavy rail: 14mm\n\n3. VERTICAL RESERVE <= min threshold:\n   Initial: R200=13mm, R260=15mm, R320Cr=16mm, R350HT=17mm, R400HT=18mm\n   Min: 3.0-4.0mm by grade (configurable via Reserve Thresholds toggle)\n   Consumed by: grinding (0.20-2.2mm/intervention) + reprofiling (reprRemL x 0.30)\n   Feasibility check: reprofiling not triggered if post-operation reserve < min threshold\n\n4. LATERAL RESERVE <= min threshold:\n   Initial: R200=7mm, R260=8mm, R320Cr=9mm, R350HT=9mm, R400HT=10mm\n   Min: 3.0-3.5mm by grade (configurable via Reserve Thresholds toggle)\n   Consumed by: reprofiling only (reprRemL per intervention, radius-based)\n   Feasibility check: reprofiling not triggered if post-operation resL < min threshold\n\n5. RCF INDEX >= 0.70:\n   Cracks 5-8mm deep. Grinding cannot reach without exhausting metal reserve.",
    links:[
-     {label:"EN 13674-1:2011 Table 2 - Wear limits for vignole rail",url:"https://www.en-standard.eu/bs-en-13674-1-2011-railway-applications-track-rail/",type:"standard"},
-     {label:"UIC 714R - Rail defect action levels (2004)",url:"https://uic.org/IMG/pdf/714r.pdf",type:"standard"},
+      {label:"EN 13674-1:2011+A1:2017 - Vignole rail profiles and steel grades (section reference)",url:"https://standards.iteh.ai/catalog/standards/cen/06f3050c-afce-4a1d-82d4-94efc51b7849/en-13674-1-2011a1-2017",type:"standard"},
+      {label:"UIC 712R - Rail defects",url:"https://shop.uic.org/en/withdrawn-documents/9326-rail-defects-9346.html",type:"standard"},
      {label:"Network Rail NR/L2/TRK/001 - Track inspection and maintenance (2022)",url:"https://www.networkrail.co.uk/industry-and-commercial/",type:"standard"},
      {label:"Infrabel TR 00059 - Rail inspection and renewal criteria (2021)",url:"https://www.infrabel.be/en/about-infrabel/technical-references",type:"standard"},
    ],
    details:[
-     {heading:"The three replacement triggers in detail",
-      text:"The simulator checks all three conditions at every step and triggers replacement the moment ANY ONE is exceeded.\n\n1. VERTICAL WEAR >= limit\nRail head height reduced beyond safe limit. The wheel drops too far into the rail, increasing flanging load dangerously. Set by EN 13674-1 Table 2.\n\n2. LATERAL WEAR >= limit\nGauge face worn beyond safe limit. Creates derailment risk in curves where rail is already tilted under lateral load. Lateral limit is typically higher than vertical because the rail tolerates more gauge face loss before safety is compromised.\n\n3. RCF Index >= 0.70\nExtensive sub-surface cracking makes the rail structurally unsafe even if dimensional wear limits are not yet reached. A rail replaced for RCF often still has significant wear reserve - the failure mode is fatigue, not abrasion."},
+      {heading:"The three replacement triggers in detail",
+       text:"The simulator checks all three conditions at every step and triggers replacement the moment ANY ONE is exceeded.\n\n1. VERTICAL WEAR >= limit\nRail head height reduced beyond the configured engineering limit. In the current code, this limit comes first from the selected rail profile family and can then be overridden manually.\n\n2. LATERAL WEAR >= limit\nGauge face worn beyond the configured engineering limit. Lateral limit is typically higher than vertical because the rail tolerates more gauge-face loss before section geometry becomes unacceptable.\n\n3. RCF Index >= 0.70\nExtensive sub-surface cracking makes the rail structurally unsafe even if dimensional wear limits are not yet reached. A rail replaced for RCF often still has significant wear reserve - the failure mode is fatigue, not abrasion.\n\nImportant: EN 13674-1 and EN 14811 define rail products, profiles and grades. They do not provide a single universal lifecycle wear-action table for all tram, metro and heavy-rail networks. The simulator therefore uses profile-anchored engineering defaults calibrated with network practice and literature."},
      {table:[["Context","Vertical limit","Lateral limit","Typical section"],
              ["Tram","7 mm","8 mm","41-54 kg/m"],
              ["Metro / LRT","9 mm","11 mm","54-60 kg/m"],
@@ -2097,7 +2097,6 @@ var HELP=[
      {label:"Rooij L. et al. (2023) - Statistical analysis of rail wear, Belgian network, Wear 522",url:"https://doi.org/10.1016/j.wear.2022.204764",type:"paper"},
      {label:"Liu B. et al. (2021) - Rail wear on Guangzhou Metro, Wear 477",url:"https://doi.org/10.1016/j.wear.2021.203830",type:"paper"},
      {label:"Wang W.J. et al. (2022) - Wear of EMU depot track, Railway Sciences 1(2)",url:"https://doi.org/10.1007/s40534-022-00271-2",type:"paper"},
-     {label:"ASTM E2660 - Standard guide for wear measurement in railway track",url:"https://www.astm.org/e2660-09r14.html",type:"standard"},
    ]
   },
   {id:"limits",title:"Known Limitations",
@@ -2110,10 +2109,9 @@ var HELP=[
    ]
   },
   {id:"tamping",title:"Ballast Tamping Strategy",
-  body:"PURPOSE: The Ballast Tamping module estimates preventive tamping schedules, ballast top-up requirements, degarnissage cycles, and associated costs for ballasted track. It is only active when Track Form = Ballast.\n\nSCOPE: Covers 5 radius bands (r1 to r5) and any Special Zones (stations, sharp curves). Each simulated segment uses its assigned representative speed, which influences tamping frequency through the speed factor. Special zones follow their simulated geometry and traffic settings.\n\nFREQUENCY MODEL: Interval (MGT) = TAMP_BASE_MGT[context][band] x f_platform x f_speed\n\nPLATFORM QUALITY FACTOR (f_platform):\n  P1 - Excellent (stable granular) : 1.20 -- less degradation, longer interval\n  P2 - Good (consolidated cohesive) : 1.00 -- reference\n  P3 - Fair (clay, soft soil) : 0.70 -- faster settlement, shorter interval\n  P4 - Poor (heterogeneous fill) : 0.45 -- very frequent tamping required\n\nSPEED FACTOR (f_speed):\n  f_speed = sqrt(V_ref / V_segment)   with V_ref = 80 km/h\n  Higher speed = tighter geometric tolerances = more frequent tamping\n  Example: 160 km/h segment -> f_speed = sqrt(80/160) = 0.71 -> 29% shorter interval\n\nBALLAST TOP-UP: Each tamping intervention displaces and attrits ballast. Default top-up by band (kg/m/intervention):\n  r1 R<100m: 50 kg/m | r2 100-200m: 40 | r3 200-400m: 30 | r4 400-800m: 20 | r5 R>=800m: 15\n  Values are configurable. Tighter curves lose more ballast laterally.\n\nDEGARNISSAGE: After N tamping cycles, ballast contamination, fouling, and drainage loss become material. In practice, many networks trigger ballast cleaning or renewal after about 5-7 tamping cycles depending on fouling rate, drainage condition, and local maintenance standards.\n  Default N = 6 cycles (ORE B17: 5-7 typical)\n  Degarnissage top-up = 8x standard appoint rate (UIC 714R / NR/L2/TRK/004)\n\nCOST MODEL: Total = Operation + Mobilisation + Ballast top-up + Degarnissage\n  Operation: EUR/ml x length x n_interventions (sub) or (fuelLph x gasoilEurL + maintEurH + labourTeamEurH) / prodMlH (own)\n  Mobilisation: fixed cost per intervention (own fleet = 0)\n  Ballast: appT x ballastEurT (delivered price)\n  Degarnissage: degarnOpMl x length x nDegarn + degarnBallastT x ballastEurT\n\nSTANDARDS: UIC 712R, UIC 714R, EN 13848-5, ORE B17, Network Rail NR/L2/TRK/004.",
+  body:"PURPOSE: The Ballast Tamping module estimates preventive tamping schedules, ballast top-up requirements, degarnissage cycles, and associated costs for ballasted track. It is only active when Track Form = Ballast.\n\nSCOPE: Covers 5 radius bands (r1 to r5) and any Special Zones (stations, sharp curves). Each simulated segment uses its assigned representative speed, which influences tamping frequency through the speed factor. Special zones follow their simulated geometry and traffic settings.\n\nFREQUENCY MODEL: Interval (MGT) = TAMP_BASE_MGT[context][band] x f_platform x f_speed\n\nPLATFORM QUALITY FACTOR (f_platform):\n  P1 - Excellent (stable granular) : 1.20 -- less degradation, longer interval\n  P2 - Good (consolidated cohesive) : 1.00 -- reference\n  P3 - Fair (clay, soft soil) : 0.70 -- faster settlement, shorter interval\n  P4 - Poor (heterogeneous fill) : 0.45 -- very frequent tamping required\n\nSPEED FACTOR (f_speed):\n  f_speed = sqrt(V_ref / V_segment)   with V_ref = 80 km/h\n  Higher speed = tighter geometric tolerances = more frequent tamping\n  Example: 160 km/h segment -> f_speed = sqrt(80/160) = 0.71 -> 29% shorter interval\n\nBALLAST TOP-UP: Each tamping intervention displaces and attrits ballast. Default top-up by band (kg/m/intervention):\n  r1 R<100m: 50 kg/m | r2 100-200m: 40 | r3 200-400m: 30 | r4 400-800m: 20 | r5 R>=800m: 15\n  Values are configurable. Tighter curves lose more ballast laterally.\n\nDEGARNISSAGE: After N tamping cycles, ballast contamination, fouling, and drainage loss become material. In practice, many networks trigger ballast cleaning or renewal after about 5-7 tamping cycles depending on fouling rate, drainage condition, and local maintenance standards.\n  Default N = 6 cycles (ORE B17: 5-7 typical)\n  Degarnissage top-up = 8x standard appoint rate (ORE B17 / NR/L2/TRK/004 engineering default)\n\nCOST MODEL: Total = Operation + Mobilisation + Ballast top-up + Degarnissage\n  Operation: EUR/ml x length x n_interventions (sub) or (fuelLph x gasoilEurL + maintEurH + labourTeamEurH) / prodMlH (own)\n  Mobilisation: fixed cost per intervention (own fleet = 0)\n  Ballast: appT x ballastEurT (delivered price)\n  Degarnissage: degarnOpMl x length x nDegarn + degarnBallastT x ballastEurT\n\nREFERENCES: UIC 714R, EN 13848-5, ORE B17, Network Rail NR/L2/TRK/004.",
    links:[
-     {label:"UIC 712R - Recommendations for the evaluation of the state of ballasted track (2002)",url:"https://uic.org/spip.php?article491",type:"standard"},
-     {label:"UIC 714R - Classification of lines for the purpose of track maintenance (2004)",url:"https://uic.org/spip.php?article491",type:"standard"},
+      {label:"UIC 714R - Classification of lines for the purpose of track maintenance (2004)",url:"https://shop.uic.org/en/withdrawn-documents/14177-classification-of-lines-for-the-purpose-of-track-maintenance.html",type:"standard"},
      {label:"EN 13848-5 - Railway applications. Track geometry quality. Geometry quality levels (2008)",url:"https://www.en-standard.eu/bs-en-13848-5-2008-railway-applications-track-geometry-quality/",type:"standard"},
      {label:"Lichtberger B. (2005) - Track Compendium, Eurailpress",url:"https://eurailpress.de/",type:"book"},
      {label:"Esveld C. (2001) - Modern Railway Track, 2nd ed. Ch.8 Ballast degradation model",url:"https://www.mrt-productions.nl/",type:"book"},
@@ -2135,7 +2133,7 @@ var HELP=[
              ["Interval base metro r5","48 MGT","35-65 MGT","Singapore LTA 2020"],
              ["Interval base heavy r5","65 MGT","50-80 MGT","Infrabel REX 2023"],
              ["f_platform P3","0.70","0.50-0.85","Esveld 2001 sec.8.3"],
-             ["f_speed formula","sqrt(80/V)","--","UIC 712R adapted"],
+            ["f_speed formula","sqrt(80/V)","--","Engineering rule calibrated for tamping planning"],
              ["Degarnissage cycles","6","5-7","ORE B17"],
              ["Degarnissage top-up factor","8x","6-10x","NR/L2/TRK/004"],
              ["Top-up r1 (R<100m)","50 kg/m","30-80 kg/m","Infrabel REX 2023"],
@@ -2329,7 +2327,7 @@ function BallastPanel(props) {
 
       <Card title="Ballast Top-up by Radius Band (kg/m/intervention)">
         <div style={{fontSize:11,color:cl2.dim,marginBottom:10}}>
-          Tighter curves lose more ballast laterally. Degarnissage = {TAMP_DEGARN_FACTOR}x top-up rate (UIC 714R / Network Rail NR/L2/TRK/004).
+          Tighter curves lose more ballast laterally. Degarnissage = {TAMP_DEGARN_FACTOR}x top-up rate (ORE B17 / Network Rail NR/L2/TRK/004).
         </div>
         <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10}}>
           {["r1","r2","r3","r4","r5"].map(function(band){
@@ -4759,12 +4757,12 @@ export default function App() {
     
     subTitle("Standards and Normative References");
     var srcs = [
-      "EN 13674-1:2011 - Railway applications. Track. Rail. Vignole railway rails 46 kg/m and above",
-      "UIC 714R - Classification of lines for the purpose of track maintenance (2004)",
+      "EN 13674-1:2011+A1:2017 - Railway applications. Track. Rail. Part 1: Vignole railway rails 46 kg/m and above",
+      "EN 14811:2019 - Railway applications. Track. Special purpose rail. Grooved rails and associated construction profiles",
       "EN 13231-3:2012 - Railway applications. Track. Acceptance of works. Rail grinding",
-      "prEN 17343 - Railway applications. Track. Rail grinding specification (CEN)",
-      "AREMA Manual for Railway Engineering, Chapter 4 - Rail (2022)",
-      "ASTM E2660 - Standard guide for wear measurement in railway track",
+      "EN 13803 - Railway applications. Track. Track alignment design parameters",
+      "EN 13848-5:2008 - Railway applications. Track geometry quality. Part 5: Geometric quality levels. Plain line",
+      "UIC 714R - Classification of lines for the purpose of track maintenance",
     ];
     srcs.forEach(function(s){ bodyText("- "+s, 3); });
     y+=4;
